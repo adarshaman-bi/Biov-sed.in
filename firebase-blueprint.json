@@ -1,0 +1,435 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information, role definitions, and exam preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Full name of the user" },
+        "photoURL": { "type": "string", "description": "URL of profile picture" },
+        "role": { "type": "string", "enum": ["user", "teacher", "institute", "moderator", "admin"], "description": "Role-based access control level" },
+        "examType": { "type": "string", "enum": ["JEE", "NEET", "Both"], "description": "Exam focus of the student" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Account modification timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Teacher": {
+      "title": "Teacher Profile",
+      "description": "Information about JEE/NEET educators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "subject": { "type": "string" },
+        "instituteId": { "type": "string" },
+        "instituteName": { "type": "string" },
+        "bio": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "trustScore": { "type": "number" },
+        "followersCount": { "type": "number" },
+        "officialLinks": { "type": "array" },
+        "subjects": { "type": "array" },
+        "exams": { "type": "array" },
+        "isVerified": { "type": "boolean" },
+        "verified": { "type": "boolean" },
+        "verificationStatus": { "type": "string" },
+        "verificationMethod": { "type": "array" },
+        "verificationSourceIds": { "type": "array" },
+        "kgEntityId": { "type": "string" },
+        "verificationProvenance": { "type": "string" },
+        "youtubeChannelId": { "type": "string" },
+        "officialWebsite": { "type": "string" },
+        "socialProfiles": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "isVerified"]
+    },
+    "Institute": {
+      "title": "Institute Profile",
+      "description": "Official coachings and institutes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "logo": { "type": "string" },
+        "description": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "trustScore": { "type": "number" },
+        "followersCount": { "type": "number" },
+        "officialLinks": { "type": "array" },
+        "exams": { "type": "array" },
+        "isVerified": { "type": "boolean" },
+        "verificationStatus": { "type": "string" },
+        "verificationMethod": { "type": "array" },
+        "kgEntityId": { "type": "string" },
+        "verificationProvenance": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "isVerified"]
+    },
+    "Lecture": {
+      "title": "Lecture Video",
+      "description": "Single educational lecture video",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "subject": { "type": "string" },
+        "examType": { "type": "string" },
+        "contentType": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "instituteId": { "type": "string" },
+        "playlistId": { "type": "string" },
+        "duration": { "type": "string" },
+        "viewsCount": { "type": "number" },
+        "likesCount": { "type": "number" },
+        "publishDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "youtubeVideoId": { "type": "string" },
+        "chapter": { "type": "string" },
+        "durationSec": { "type": "number" },
+        "language": { "type": "string" },
+        "teacherRef": { "type": "string" },
+        "sourceUrl": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["id", "title", "teacherId", "subject"]
+    },
+    "Playlist": {
+      "title": "Playlist",
+      "description": "A collection of lectures covering a chapter or course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "instituteId": { "type": "string" },
+        "subject": { "type": "string" },
+        "examType": { "type": "string" },
+        "lecturesCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "youtubePlaylistId": { "type": "string" },
+        "channelId": { "type": "string" },
+        "examTypes": { "type": "array" },
+        "teacherRef": { "type": "string" },
+        "sourceUrl": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "teacherId", "subject"]
+    },
+    "OneShot": {
+      "title": "One Shot lecture video",
+      "description": "Comprehensive full chapter academic summaries",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "subject": { "type": "string" },
+        "examType": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "duration": { "type": "string" },
+        "viewsCount": { "type": "number" },
+        "likesCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "videoUrl", "teacherId", "subject", "examType"]
+    },
+    "Subject": {
+      "title": "Subject Details",
+      "description": "Academic educational subjects matching curricula requirements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "lectureCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Batch": {
+      "title": "Batch",
+      "description": "A structured course batch offered by institutes and teachers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "instituteId": { "type": "string" },
+        "teachers": { "type": "array" },
+        "subject": { "type": "string" },
+        "examType": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "instituteId", "examType"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Student review of teacher or institute",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userDisplayName": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["teacher", "institute"] },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "trustImpact": { "type": "number" },
+        "isVerifiedStudent": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "targetId", "targetType", "rating", "comment"]
+    },
+    "Rating": {
+      "title": "Content Rating Details",
+      "description": "Granular educational content ratings logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["lecture", "playlist", "oneshot"] },
+        "value": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "targetId", "targetType", "value"]
+    },
+    "TrustScore": {
+      "title": "Trust Score breakdown",
+      "description": "Entity trust signals breakdown",
+      "type": "object",
+      "properties": {
+        "entityId": { "type": "string" },
+        "profileCompleteness": { "type": "number" },
+        "verifiedCredentials": { "type": "number" },
+        "officialLinksScore": { "type": "number" },
+        "reviewReliability": { "type": "number" },
+        "contentConsistency": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["entityId", "totalScore"]
+    },
+    "History": {
+      "title": "Watch History",
+      "description": "User's lecture watch progress and history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "lectureId": { "type": "string" },
+        "progressSeconds": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "lectureId"]
+    },
+    "Report": {
+      "title": "Moderation Report",
+      "description": "Report of inappropriate content, reviews, or entities",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reporterId": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["teacher", "institute", "review", "lecture"] },
+        "reason": { "type": "string" },
+        "details": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "resolved", "dismissed"] },
+        "resolution": { "type": "string" },
+        "resolvedBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "resolvedAt": { "type": "string" }
+      },
+      "required": ["id", "reporterId", "targetId", "targetType", "reason", "status"]
+    },
+    "AdminLog": {
+      "title": "Staff Audit Log",
+      "description": "Security logs recording critical actions made by moderators and administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminId": { "type": "string" },
+        "action": { "type": "string" },
+        "targetId": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "adminId", "action", "createdAt"]
+    },
+    "Analytic": {
+      "title": "Telemetry Events Record",
+      "description": "Application session events and platform metrics logging",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventType": { "type": "string" },
+        "userId": { "type": "string" },
+        "lectureId": { "type": "string" },
+        "durationActive": { "type": "number" },
+        "platform": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "eventType", "createdAt"]
+    },
+    "UploadedFile": {
+      "title": "Student Uploaded Files Details",
+      "description": "Security isolated document/pdf attachments submitted by pupils",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "uploadedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "fileName", "fileUrl"]
+    },
+    "IngestionLog": {
+      "title": "Ingestion Logs record",
+      "description": "Information about ingestion task status, errors and history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskType": { "type": "string", "enum": ["FetchPlaylists", "FetchPlaylistVideos", "VerifyTeacher"] },
+        "targetId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "attempts": { "type": "number" },
+        "startedAt": { "type": "string" },
+        "endedAt": { "type": "string" },
+        "error": { "type": "string" }
+      },
+      "required": ["taskType", "targetId", "status", "attempts", "startedAt"]
+    },
+    "IngestionControl": {
+      "title": "Ingestion Control state",
+      "description": "Controls the ingestion phases and tracked import progress",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "phase": { "type": "number" },
+        "playlistsImported": { "type": "number" },
+        "lecturesImported": { "type": "number" },
+        "approved": { "type": "boolean" },
+        "nextPhaseStart": { "type": "string" }
+      },
+      "required": ["phase", "playlistsImported", "lecturesImported", "approved"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Registered students, teachers, institutes, and staff"
+    },
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Directory of JEE and NEET educators"
+    },
+    "/institutes/{instituteId}": {
+      "schema": "Institute",
+      "description": "Directory of JEE and NEET institutes"
+    },
+    "/lectures/{lectureId}": {
+      "schema": "Lecture",
+      "description": "Academic videos covering subjects, chapters and one-shots"
+    },
+    "/playlists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "Academic structured playlists tracking chapters"
+    },
+    "/oneshots/{oneshotId}": {
+      "schema": "OneShot",
+      "description": "Academic specialized full-chapter summary classes"
+    },
+    "/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Educational catalog of active subjects"
+    },
+    "/batches/{batchId}": {
+      "schema": "Batch",
+      "description": "Active structured batches from official institutes"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Public reviews and metrics for institutes and teachers"
+    },
+    "/ratings/{ratingId}": {
+      "schema": "Rating",
+      "description": "Educational content metadata ratings logs"
+    },
+    "/trustScores/{entityId}": {
+      "schema": "TrustScore",
+      "description": "Dynamic trust indicators calculating credentials and feedback"
+    },
+    "/users/{userId}/watchHistory/{lectureId}": {
+      "schema": "History",
+      "description": "Personal secure history tracking"
+    },
+    "/users/{userId}/watchLater/{lectureId}": {
+      "schema": "Lecture",
+      "description": "Personal bookmark of lectures to watch later"
+    },
+    "/users/{userId}/likedVideos/{lectureId}": {
+      "schema": "Lecture",
+      "description": "Personal tracking of liked lecture videos"
+    },
+    "/users/{userId}/following/{entityId}": {
+      "schema": "Teacher",
+      "description": "List of followed teachers and institutes secure"
+    },
+    "/users/{userId}/savedPlaylists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "Personal student bookmarks of academic study directories"
+    },
+    "/users/{userId}/uploadedFiles/{fileId}": {
+      "schema": "UploadedFile",
+      "description": "Confidential files and notes logged by standard students"
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": "object",
+      "description": "User specific notifications and activities logs"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Global moderation reporting queue available for moderators and admins"
+    },
+    "/adminLogs/{logId}": {
+      "schema": "AdminLog",
+      "description": "Regulatory audit tracking for administrative staff"
+    },
+    "/analytics/{analyticId}": {
+      "schema": "Analytic",
+      "description": "System usage metrics and content analytics logging"
+    },
+    "/ingestionLogs/{logId}": {
+      "schema": "IngestionLog",
+      "description": "Information about ingestion task status, errors and history"
+    },
+    "/ingestionControl/{controlId}": {
+      "schema": "IngestionControl",
+      "description": "Controls the ingestion phases and tracked import progress"
+    }
+  }
+}

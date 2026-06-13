@@ -1,0 +1,340 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // REUSABLE GLOBAL SECURITY HELPERS
+    // ==========================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return getUserDoc().data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'admin';
+    }
+
+    function isModerator() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserRole() == 'moderator' || getUserRole() == 'admin');
+    }
+
+    function isEducator() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserRole() == 'teacher' || getUserRole() == 'institute');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ==========================================
+    // STANDALONE SCHEMA VALIDATION HELPERS
+    // ==========================================
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 200 &&
+             data.role is string && data.role in ['user', 'teacher', 'institute', 'moderator', 'admin'];
+    }
+
+    function isValidTeacher(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 150 &&
+             data.subject is string && data.subject.size() <= 100 &&
+             data.avatar is string && data.avatar.size() <= 1000 &&
+             data.isVerified is bool;
+    }
+
+    function isValidInstitute(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 150 &&
+             data.isVerified is bool;
+    }
+
+    function isValidLecture(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.title is string && data.title.size() <= 300 &&
+             data.videoUrl is string && data.videoUrl.size() <= 1000 &&
+             data.subject is string && data.subject.size() <= 100 &&
+             data.examType is string && data.examType.size() <= 50;
+    }
+
+    function isValidPlaylist(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.title is string && data.title.size() <= 300 &&
+             data.subject is string && data.subject.size() <= 100 &&
+             data.examType is string && data.examType.size() <= 50;
+    }
+
+    function isValidOneShot(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.title is string && data.title.size() <= 300 &&
+             data.videoUrl is string && data.videoUrl.size() <= 1000 &&
+             data.subject is string && data.subject.size() <= 100 &&
+             data.examType is string && data.examType.size() <= 50;
+    }
+
+    function isValidSubject(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 100;
+    }
+
+    function isValidBatch(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.instituteId is string && data.instituteId.size() <= 128 &&
+             data.examType is string && data.examType.size() <= 50;
+    }
+
+    function isValidReview(data) {
+      return data.id is string && data.id.size() <= 256 &&
+             data.userId == request.auth.uid &&
+             (data.rating == null || (data.rating >= 1 && data.rating <= 5)) &&
+             data.comment is string && data.comment.size() <= 2000 &&
+             data.targetType in ['teacher', 'institute'];
+    }
+
+    function isValidRating(data) {
+      return data.id is string && data.id.size() <= 256 &&
+             data.userId == request.auth.uid &&
+             data.targetId is string && data.targetId.size() <= 128 &&
+             data.value >= 1 && data.value <= 5 &&
+             data.targetType in ['lecture', 'playlist', 'oneshot'];
+    }
+
+    function isValidUploadedFile(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.fileName is string && data.fileName.size() <= 300 &&
+             data.fileUrl is string && data.fileUrl.size() <= 1000;
+    }
+
+    function isValidReport(data) {
+      return data.id is string && data.id.size() <= 256 &&
+             data.reporterId == request.auth.uid &&
+             data.targetId is string && data.targetId.size() <= 128 &&
+             data.status in ['pending', 'resolved', 'dismissed'] &&
+             data.reason is string && data.reason.size() <= 1000;
+    }
+
+    function isValidAdminLog(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.adminId == request.auth.uid &&
+             data.action is string && data.action.size() <= 200;
+    }
+
+    function isValidAnalytic(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.eventType is string && data.eventType.size() <= 200;
+    }
+
+    function isValidTrustScore(data) {
+      return data.entityId is string && data.entityId.size() <= 128 &&
+             data.totalScore is number && data.totalScore >= 0 && data.totalScore <= 100;
+    }
+
+    function isValidIngestionLog(data) {
+      return data.taskType in ['FetchPlaylists', 'FetchPlaylistVideos', 'VerifyTeacher'] &&
+             data.targetId is string && data.targetId.size() <= 128 &&
+             data.status in ['pending', 'completed', 'failed'] &&
+             data.attempts is number;
+    }
+
+    function isValidIngestionControl(data) {
+      return data.phase is number &&
+             data.playlistsImported is number &&
+             data.lecturesImported is number &&
+             data.approved is bool;
+    }
+
+    // ==========================================
+    // RESOURCE ROUTES & ACCESS POLICIES
+    // ==========================================
+
+    // Users Collection (Guarded private state & settings)
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isModerator() || isAdmin());
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && incoming().role == 'user'; // Defaults to standard user, protects admin escalation
+      allow update: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && incoming().role == existing().role; // Role modification locked
+      allow delete: if isAdmin();
+    }
+
+    // Users Watch Progress History Logs
+    match /users/{userId}/watchHistory/{lectureId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(lectureId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Users Personal Bookmarks (Watch Later)
+    match /users/{userId}/watchLater/{lectureId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(lectureId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Users Tracked Likes list
+    match /users/{userId}/likedVideos/{lectureId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(lectureId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Users Educator Following list
+    match /users/{userId}/following/{entityId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(entityId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Users Bookmarked/Saved Playlists
+    match /users/{userId}/savedPlaylists/{playlistId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(playlistId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Users Secured Private Notes and Uploaded Study Material Attachments
+    match /users/{userId}/uploadedFiles/{fileId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(fileId) && isValidUploadedFile(incoming());
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Users Notifications logs
+    match /users/{userId}/notifications/{notificationId} {
+      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(notificationId);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Teacher Profiles
+    match /teachers/{teacherId} {
+      allow read, write: if true;
+    }
+
+    // Institute Profiles
+    match /institutes/{instituteId} {
+      allow read, write: if true;
+    }
+
+    // Lecture Catalog
+    match /lectures/{lectureId} {
+      allow read, write: if true;
+    }
+
+    // Playlists directory
+    match /playlists/{playlistId} {
+      allow read, write: if true;
+    }
+
+    // Specialized OneShot full-chapter items
+    match /oneshots/{oneshotId} {
+      allow read, write: if true;
+    }
+
+    // Subjects system database records Catalog (Admins/moderators managed)
+    match /subjects/{subjectId} {
+      allow read: if true;
+      allow create, update: if (isAdmin() || isModerator()) && isValidId(subjectId) && isValidSubject(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Institute Batches
+    match /batches/{batchId} {
+      allow read, write: if true;
+    }
+
+    // Verified Reviews (Students publish feedback)
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(reviewId) && isValidReview(incoming());
+      allow update: if isSignedIn() && (
+        isModerator() || isAdmin() ||
+        (isValidId(reviewId) && isValidReview(incoming()) && incoming().userId == existing().userId && incoming().flagged == existing().flagged)
+      );
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isModerator() || isAdmin());
+    }
+
+    // Content quality / Multi-dimensional ratings logs
+    match /ratings/{ratingId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(ratingId) && isValidRating(incoming());
+      allow update: if isSignedIn() && isValidId(ratingId) && isValidRating(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isModerator() || isAdmin());
+    }
+
+    // TrustScores dynamic computed metrics
+    match /trustScores/{entityId} {
+      allow read, write: if true;
+    }
+
+    // Abuse / Spam Reports queue
+    match /reports/{reportId} {
+      allow read: if isModerator() || isAdmin();
+      allow create: if isSignedIn() && isValidId(reportId) && isValidReport(incoming()) && incoming().status == 'pending';
+      allow update: if isModerator() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Confidential Staff Action logs (Immutable)
+    match /adminLogs/{logId} {
+      allow read: if isModerator() || isAdmin();
+      allow create: if (isModerator() || isAdmin()) && isValidId(logId) && isValidAdminLog(incoming());
+      allow update, delete: if false; // Logs cannot be altered or removed
+    }
+
+    // Session telemetry context events (Write-once)
+    match /analytics/{analyticId} {
+      allow read: if isAdmin();
+      allow create: if isValidId(analyticId) && isValidAnalytic(incoming());
+      allow update, delete: if false; // Analytics records are immutable
+    }
+
+    // Ingestion Logs Match Definitions (Admins and Moderators)
+    match /ingestionLogs/{logId} {
+      allow read: if isModerator() || isAdmin();
+      allow create: if (isModerator() || isAdmin()) && isValidId(logId) && isValidIngestionLog(incoming());
+      allow update: if (isModerator() || isAdmin()) && isValidId(logId) && isValidIngestionLog(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Ingestion Control Match Definitions (Admins and Moderators)
+    match /ingestionControl/{controlId} {
+      allow read: if isModerator() || isAdmin();
+      allow create: if (isModerator() || isAdmin()) && isValidId(controlId) && isValidIngestionControl(incoming());
+      allow update: if (isModerator() || isAdmin()) && isValidId(controlId) && isValidIngestionControl(incoming());
+      allow delete: if isAdmin();
+    }
+
+  }
+}

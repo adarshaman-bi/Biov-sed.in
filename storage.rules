@@ -1,0 +1,47 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Core check if requester is logged in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Check if the file path matches the requester's UID
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Get role from Firestore database document
+    function getUserRole(userId) {
+      return firestore.get(/databases/(default)/documents/users/$(userId)).data.role;
+    }
+    
+    // Check if user is a moderator or admin
+    function isModerator(userId) {
+      return isSignedIn() && (getUserRole(userId) == 'moderator' || getUserRole(userId) == 'admin');
+    }
+    
+    // Check if user is an admin
+    function isAdmin(userId) {
+      return isSignedIn() && getUserRole(userId) == 'admin';
+    }
+
+    // Secure target hierarchy rules
+    match /users/{userId}/{folder}/{fileName} {
+      // Only the folder owner or moderation team can read files
+      allow read: if isSignedIn() && (isOwner(userId) || isModerator(request.auth.uid));
+      
+      // Prevent unauthorized uploads.
+      // Must be owner of the files, folder must match specific structural buckets,
+      // and enforce reasonable file size constraints (5MB for profiles, 50MB for notes/materials)
+      allow create, update: if isSignedIn() 
+        && isOwner(userId) 
+        && folder in ['profile', 'notes', 'documents', 'uploads']
+        && (folder == 'profile' ? request.resource.size < 5 * 1024 * 1024 : request.resource.size < 50 * 1024 * 1024);
+      
+      // Prevent unauthorized deletes. Deletions allowed for the owner or moderation team.
+      allow delete: if isSignedIn() && (isOwner(userId) || isModerator(request.auth.uid));
+    }
+  }
+}

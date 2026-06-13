@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Inter", ui-monospace, SFMono-Regular, Menlo, monospace;
+  
+  --color-brand-black: #0A0A0A;
+  --color-brand-dark: #111111;
+  --color-brand-border: #262626;
+  --color-brand-gray: #71717A;
+  --color-brand-accent: #FFFFFF;
+}
+
+/* Base custom styles to reinforce pitch dark minimal Google AI Studio styling */
+body {
+  background-color: #0A0A0A;
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+}
+
+@keyframes progressSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-progress-slide {
+  animation: progressSlide 1.5s infinite ease-in-out;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0A0A0A;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #71717A;
+}
