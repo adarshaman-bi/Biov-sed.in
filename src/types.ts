@@ -9,6 +9,14 @@ export interface UserProfile {
   examType: 'JEE' | 'NEET' | 'Both' | string;
   createdAt: string;
   updatedAt: string;
+  loginType?: 'email' | 'google' | 'guest' | string;
+  appearingYear?: string;
+  preferredSubjects?: string[];
+  watchedContent?: string[];
+  savedContent?: string[];
+  hiddenContent?: string[];
+  likedContent?: string[];
+  onboardingCompleted?: boolean;
 }
 
 export interface TeacherProfile {
@@ -90,6 +98,8 @@ export interface Lecture {
   teacherRef?: string | null;
   sourceUrl?: string;
   verified?: boolean;
+  verificationStatus?: 'verified' | 'pending' | 'rejected' | string;
+  exams?: string[];
   lastUpdated?: string;
 }
 

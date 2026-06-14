@@ -8,7 +8,8 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase App Check safely
+// Initialize Firebase App Check safely (disabled to prevent token interference in development preview iframe)
+/*
 if (typeof window !== 'undefined') {
   // Activate debug token for seamless iframe and dev-tool compilation/testing
   if ((import.meta as any).env?.DEV) {
@@ -24,6 +25,7 @@ if (typeof window !== 'undefined') {
     console.warn('App Check initialization bypassed (verification pending):', err);
   }
 }
+*/
 
 // CRITICAL: The app will break if firestoreDatabaseId is not specified
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);

@@ -80,6 +80,18 @@ export async function updateUserExamPreference(uid: string, examType: 'JEE' | 'N
   }
 }
 
+export async function updateUserPreferences(uid: string, preferences: Partial<UserProfile>): Promise<void> {
+  const path = `users/${uid}`;
+  try {
+    await updateDoc(doc(db, 'users', uid), {
+      ...preferences,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 // TEACHERS SERVICE
 export async function fetchTeachers(filters?: {
   subject?: string;
@@ -158,7 +170,11 @@ const STRATEGY_KEYWORDS = [
   'how to crack', 'how to clear', 'preparation tips', 'tips & tricks',
   'tips and tricks', 'roadmap', 'last minute', 'study plan', 
   'cut-off', 'cutoff', 'marks vs rank', 'rank predictor', 'secrets of success',
-  'jee strategy', 'neet strategy', 'preparation guide', 'timetable', 'time table'
+  'jee strategy', 'neet strategy', 'preparation guide', 'timetable', 'time table',
+  'leak', 'leaked', 'shocking', 'exposed', 'scam', 'do not miss', 'must watch',
+  'guaranteed marks', 'cheat codes', 'cheat code', 'fail', 'crying',
+  'emotional', 'sorry', 'insane', 'magic', 'magical', 'giveaway', 'surprise',
+  'short', 'shorts', 'reel', 'reels', 'clip', 'clips', 'tiktok'
 ];
 
 export function isStrategyOrHypeContent(title: string): boolean {
@@ -170,8 +186,17 @@ export function isStrategyOrHypeContent(title: string): boolean {
 export function isDurationBelow30Minutes(durationStr: string): boolean {
   if (!durationStr) return true;
   const dLower = durationStr.toLowerCase().trim();
-  let totalMinutes = 0;
   
+  if (dLower.startsWith('pt')) {
+    let minutes = 0;
+    const hourMatch = dLower.match(/(\d+)\s*h/);
+    if (hourMatch) minutes += parseInt(hourMatch[1], 10) * 60;
+    const minMatch = dLower.match(/(\d+)\s*m/);
+    if (minMatch) minutes += parseInt(minMatch[1], 10);
+    return minutes < 30;
+  }
+
+  let totalMinutes = 0;
   const hourMatch = dLower.match(/(\d+)\s*h/);
   if (hourMatch) {
     totalMinutes += parseInt(hourMatch[1], 10) * 60;
@@ -202,6 +227,7 @@ export async function fetchLectures(filters?: {
   contentType?: 'lecture' | 'oneshot' | 'playlist';
   teacherId?: string;
   instituteId?: string;
+  includeUnverified?: boolean;
 }): Promise<Lecture[]> {
   const path = 'lectures';
   try {
@@ -209,8 +235,18 @@ export async function fetchLectures(filters?: {
     const snap = await getDocs(q);
     let lectures = snap.docs.map(d => d.data() as Lecture);
 
-    // Apply strict production content quality filters: block shorts and strategy/hype titles
-    lectures = lectures.filter(l => !isDurationBelow30Minutes(l.duration) && !isStrategyOrHypeContent(l.title));
+    // Apply strict production content quality filters: block shorts, strategy/hype titles, and videos without thumbnails
+    lectures = lectures.filter(l => 
+      l.thumbnailUrl && 
+      l.thumbnailUrl.trim() !== '' && 
+      !isDurationBelow30Minutes(l.duration) && 
+      !isStrategyOrHypeContent(l.title)
+    );
+
+    // Filter by verification unless includeUnverified is set (e.g., in Admin panel)
+    if (!filters?.includeUnverified) {
+      lectures = lectures.filter(l => l.verified === true || l.verificationStatus === 'verified');
+    }
 
     if (filters) {
       if (filters.subject && filters.subject !== 'All') {
@@ -795,6 +831,17 @@ export async function markNotificationAsRead(notificationId: string): Promise<vo
   }
 }
 
+export async function deleteNotification(notificationId: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  const path = `users/${user.uid}/notifications/${notificationId}`;
+  try {
+    await deleteDoc(doc(db, 'users', user.uid, 'notifications', notificationId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
 export async function addRealNotification(
   title: string,
   message: string,
@@ -922,6 +969,24 @@ export async function fetchIngestionControl(id: string = 'phase1_state'): Promis
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
     return null;
+  }
+}
+
+export async function updateLectureVerification(
+  lectureId: string, 
+  verified: boolean, 
+  status: 'verified' | 'pending' | 'rejected'
+): Promise<void> {
+  const path = `lectures/${lectureId}`;
+  try {
+    await updateDoc(doc(db, 'lectures', lectureId), {
+      verified,
+      verificationStatus: status,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
   }
 }
 

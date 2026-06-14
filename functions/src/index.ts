@@ -239,10 +239,7 @@ async function fetchWithBackoff(
  * fetches playlists, and syncs to a holding collection in Firestore.
  * Abides strictly by per-phase resource cap (200 playlists) inside ingestionControl.
  */
-export const syncChannelPlaylists = functions.pubsub
-  .schedule('0 3 * * *')
-  .timeZone('UTC')
-  .onRun(async (context) => {
+export const syncChannelPlaylists = functions.https.onRequest(async (req, res) => {
     const db = admin.firestore();
     const controlRef = db.collection('ingestionControl').doc('phase1_state');
     const controlSnap = await controlRef.get();
@@ -263,7 +260,8 @@ export const syncChannelPlaylists = functions.pubsub
     // Zero-Trust gating logic: A human has to approve (set approved: true) before automated jobs run
     if (!controlData.approved) {
       console.log('🛑 [PIPELINE GATED] Pipeline has reached its cap or is unapproved by a human moderator.');
-      return null;
+      res.status(403).json({ error: 'Pipeline has reached its cap or is unapproved by a human moderator.' });
+      return;
     }
 
     const channelsToSync = [
@@ -298,7 +296,8 @@ export const syncChannelPlaylists = functions.pubsub
           error: 'Playlists cap limits executed. Gated for manual moderator oversight.',
           endedAt: new Date().toISOString()
         });
-        return null;
+        res.json({ status: 'completed', error: 'Playlists cap limits executed. Gated for manual moderator oversight.' });
+        return;
       }
 
       const newPlaylistsFound: string[] = [];
@@ -399,6 +398,8 @@ export const syncChannelPlaylists = functions.pubsub
           ? `Succeeded. Synced ${newPlaylistsFound.length} new academic playlists.`
           : 'Succeeded. No new playlists found during daily channel sync.'
       });
+      res.json({ status: 'completed', syncedCount: newPlaylistsFound.length });
+      return;
 
     } catch (err: any) {
       console.error('Failure inside daily playlist scheduled sync:', err);
@@ -408,9 +409,9 @@ export const syncChannelPlaylists = functions.pubsub
         endedAt: new Date().toISOString(),
         error: err.message || String(err)
       });
+      res.status(500).json({ error: err.message || String(err) });
+      return;
     }
-
-    return null;
   });
 
 /**

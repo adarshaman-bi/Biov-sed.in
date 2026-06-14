@@ -21,10 +21,8 @@ import {
   FileText,
   CheckCircle,
   ExternalLink,
-  Sparkles,
   LogOut
 } from 'lucide-react';
-import RecommendationsHub from './RecommendationsHub';
 
 interface ProfileDashboardProps {
   onSelectLecture: (lecture: Lecture) => void;
@@ -43,8 +41,8 @@ export default function ProfileDashboard({
   onOpenTeacher,
   activeLecture
 }: ProfileDashboardProps) {
-  const { user, setExamPreference, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'foryou' | 'history' | 'watchlist' | 'following' | 'files'>('foryou');
+  const { user, updatePreferences, resetPreferences, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState<'history' | 'watchlist' | 'following' | 'files'>('history');
 
   // Dashboard logs lists
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
@@ -76,10 +74,6 @@ export default function ProfileDashboard({
     });
 
   }, [user, activeTab]);
-
-  const handleUpdateExam = async (type: 'JEE' | 'NEET' | 'UPSC' | 'CA' | 'CUET' | 'Both' | string) => {
-    await setExamPreference(type);
-  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -134,23 +128,57 @@ export default function ProfileDashboard({
           </div>
         </div>
 
-        {/* Change persistent exam preference */}
-        <div className="space-y-2 text-left md:text-right w-full md:w-auto">
-          <label className="block text-[10px] font-mono text-brand-gray uppercase tracking-wider">Exam Stream Focus</label>
-          <div className="flex flex-wrap gap-2 md:justify-end">
-            {(['JEE', 'NEET', 'Both'] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => handleUpdateExam(type)}
-                className={`text-[10px] font-mono py-1 px-2.5 rounded-lg font-medium border cursor-pointer transition-all ${
-                  user.examType === type
-                    ? 'border-white bg-white text-black font-semibold'
-                    : 'border-brand-border bg-brand-black text-brand-gray hover:text-brand-accent'
-                }`}
-              >
-                {type === 'Both' ? 'Both Goals' : type}
-              </button>
-            ))}
+        {/* Edit exam and target year anytime from settings */}
+        <div className="flex flex-col sm:flex-row gap-6 text-left md:text-right w-full md:w-auto shrink-0 mt-4 md:mt-0">
+          <div className="space-y-2">
+            <label className="block text-[10px] font-mono text-brand-gray uppercase tracking-wider">Exam Stream Focus</label>
+            <div className="flex flex-wrap gap-1.5 md:justify-end">
+              {(['JEE', 'NEET', 'Both'] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => updatePreferences({ examType: type })}
+                  className={`text-[10px] font-mono py-1 px-2 rounded-lg font-medium border cursor-pointer transition-all ${
+                    user.examType === type
+                      ? 'border-white bg-white text-black font-semibold'
+                      : 'border-brand-border bg-brand-black text-brand-gray hover:text-brand-accent'
+                  }`}
+                >
+                  {type === 'Both' ? 'Both' : type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-mono text-brand-gray uppercase tracking-wider">Exam Year</label>
+            <div className="flex flex-wrap gap-1.5 md:justify-end">
+              {['2026', '2027', '2028'].map((yr) => (
+                <button
+                  key={yr}
+                  onClick={() => updatePreferences({ appearingYear: yr })}
+                  className={`text-[10px] font-mono py-1 px-2.5 rounded-lg font-medium border cursor-pointer transition-all ${
+                    user.appearingYear === yr
+                      ? 'border-white bg-white text-black font-semibold'
+                      : 'border-brand-border bg-brand-black text-brand-gray hover:text-brand-accent'
+                  }`}
+                >
+                  {yr}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2 flex flex-col justify-end">
+            <button
+              onClick={async () => {
+                if (window.confirm('Reset all personalized preferences and start the onboarding walkthrough again?')) {
+                  await resetPreferences();
+                }
+              }}
+              className="px-2.5 py-1.5 border border-red-500/30 hover:border-red-500 bg-red-950/20 text-red-400 text-[10px] font-mono font-bold uppercase rounded-lg transition-all cursor-pointer"
+            >
+              Reset Prefs
+            </button>
           </div>
         </div>
       </div>
@@ -158,7 +186,6 @@ export default function ProfileDashboard({
       {/* Tabs navigation */}
       <div className="flex border-b border-brand-border overflow-x-auto tab-container">
         {[
-          { id: 'foryou', label: 'For You', icon: Sparkles },
           { id: 'history', label: 'Watch History', icon: Clock },
           { id: 'watchlist', label: 'Watch Later', icon: Bookmark },
           { id: 'following', label: 'Educators Followed', icon: User },
@@ -184,11 +211,6 @@ export default function ProfileDashboard({
 
       {/* Active Tab contents */}
       <div className="min-h-[250px]">
-        {activeTab === 'foryou' && (
-          <div className="-mt-6">
-            <RecommendationsHub onSelectLecture={onSelectLecture} activeLecture={activeLecture} />
-          </div>
-        )}
 
         {activeTab === 'history' && (
           <div className="space-y-4">

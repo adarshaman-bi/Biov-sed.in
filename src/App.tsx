@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Header from './components/Header';
@@ -8,10 +8,16 @@ import DetailsModal from './components/DetailsModal';
 import ProfileDashboard from './components/ProfileDashboard';
 import ModeratorDashboard from './components/ModeratorDashboard';
 import AuthModal from './components/AuthModal';
-import RecommendationsHub from './components/RecommendationsHub';
 import OnboardingGateway from './components/OnboardingGateway';
 import NotificationsDashboard from './components/NotificationsDashboard';
 import SearchSpecsModal from './components/SearchSpecsModal';
+import {
+  personalizeLectures,
+  personalizePlaylists,
+  personalizeTeachers
+} from './services/recommendationEngine';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 import {
   fetchTeachers,
   fetchInstitutes,
@@ -20,9 +26,13 @@ import {
   fetchBatches,
   toggleFollow,
   fetchFollowingList,
-  addRealNotification
+  addRealNotification,
+  deleteNotification,
+  markNotificationAsRead,
+  isStrategyOrHypeContent,
+  isDurationBelow30Minutes
 } from './services/dbService';
-import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch } from './types';
+import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch, AppNotification } from './types';
 import {
   Star,
   Award,
@@ -51,18 +61,19 @@ import {
   ArrowLeft,
   X,
   SlidersHorizontal,
+  EyeOff,
   Clock
 } from 'lucide-react';
 import { getPlaylistThumbnail, getLectureThumbnail } from './services/thumbnailHelper';
 
 function AppContent() {
-  const { user, isGuest, enableGuestMode, loading, setExamPreference } = useAuth();
+  const { user, isGuest, enableGuestMode, loading, setExamPreference, updatePreferences } = useAuth();
 
   // Control splash screen layers (shows on initial session load)
   const [showSplash, setShowSplash] = useState(true);
 
   // Control core view layers
-  const [currentView, setCurrentView] = useState<'explore' | 'profile' | 'moderator' | 'recommendations' | 'notifications' | 'search'>('explore');
+  const [currentView, setCurrentView] = useState<'explore' | 'profile' | 'moderator' | 'notifications' | 'search'>('explore');
   const [activeLecture, setActiveLecture] = useState<Lecture | null>(null);
   const [activeExploreTab, setActiveExploreTab] = useState<'home' | 'teachers' | 'playlists' | 'tests' | 'batches' | 'lecture' | 'institutes'>('home');
   
@@ -117,6 +128,184 @@ function AppContent() {
   });
   const [followedIds, setFollowedIds] = useState<string[]>([]);
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
+
+  // Real-time notifications state & syncing hook
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const q = query(
+      collection(db, 'users', user.uid, 'notifications'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data() as AppNotification);
+      setNotifications(data);
+    }, (error) => {
+      console.warn('Real-time notifications exception bypassed:', error);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // Handle slide-off gesture dismiss
+  const handleNotificationDismiss = async (notificationId: string) => {
+    // Dynamic local state filter updates the UI instantly as the item exits the screen
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    await deleteNotification(notificationId);
+  };
+
+  // Mark all notifications as read inside the dashboard
+  const handleMarkAllNotificationsAsRead = async () => {
+    const unread = notifications.filter(n => !n.read);
+    // Optimistic UI update
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await Promise.all(unread.map(n => markNotificationAsRead(n.id)));
+  };
+
+  const isHandlingPopState = useRef(false);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      isHandlingPopState.current = true;
+      const state = event.state;
+      if (state && typeof state === 'object' && 'currentView' in state) {
+        setCurrentView(state.currentView);
+        setActiveExploreTab(state.activeExploreTab);
+        setActiveLecture(state.activeLecture);
+        setDetailModal(state.detailModal);
+      } else {
+        setCurrentView('explore');
+        setActiveExploreTab('home');
+        setActiveLecture(null);
+        setDetailModal(null);
+      }
+      setTimeout(() => {
+        isHandlingPopState.current = false;
+      }, 50);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    if (!window.history.state || !('currentView' in window.history.state)) {
+      window.history.replaceState({
+        currentView,
+        activeExploreTab,
+        activeLecture,
+        detailModal
+      }, '');
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isHandlingPopState.current) return;
+
+    const hState = window.history.state;
+    const changed = !hState ||
+      hState.currentView !== currentView ||
+      hState.activeExploreTab !== activeExploreTab ||
+      JSON.stringify(hState.activeLecture) !== JSON.stringify(activeLecture) ||
+      JSON.stringify(hState.detailModal) !== JSON.stringify(detailModal);
+
+    if (changed) {
+      window.history.pushState({
+        currentView,
+        activeExploreTab,
+        activeLecture,
+        detailModal
+      }, '');
+    }
+  }, [currentView, activeExploreTab, activeLecture, detailModal]);
+
+  const handleBackNavigation = () => {
+    if (window.history.state && window.history.length > 1) {
+      window.history.back();
+    } else {
+      setActiveLecture(null);
+      setDetailModal(null);
+      setCurrentView('explore');
+    }
+  };
+
+  // Resolve tap interaction of a notification element to route perfectly to content
+  const handleNotificationClick = async (n: AppNotification) => {
+    // Mark read in real-time
+    if (!n.read) {
+      await markNotificationAsRead(n.id);
+    }
+
+    const text = `${n.title} ${n.message}`.toLowerCase();
+
+    // 1. Check for educators/teachers matching name
+    const matchedTeacher = teachers.find(t => 
+      text.includes(t.name.toLowerCase()) || 
+      (n.senderName && t.name.toLowerCase() === n.senderName.toLowerCase()) ||
+      t.id === n.senderId
+    );
+    if (matchedTeacher) {
+      setCurrentView('explore');
+      setActiveExploreTab('teachers');
+      setDetailModal({ id: matchedTeacher.id, type: 'teacher' });
+      return;
+    }
+
+    // 2. Check for institutes matching names
+    const matchedInstitute = institutes.find(inst => 
+      text.includes(inst.name.toLowerCase())
+    );
+    if (matchedInstitute) {
+      setCurrentView('explore');
+      setActiveExploreTab('institutes');
+      setDetailModal({ id: matchedInstitute.id, type: 'institute' });
+      return;
+    }
+
+    // 3. Check for specific curation lecture
+    const matchedLecture = lectures.find(l => 
+      text.includes(l.title.toLowerCase())
+    );
+    if (matchedLecture) {
+      setCurrentView('explore');
+      setActiveLecture(matchedLecture);
+      return;
+    }
+
+    // 4. Check for playlists
+    const matchedPlaylist = playlists.find(p => 
+      text.includes(p.title.toLowerCase())
+    );
+    if (matchedPlaylist) {
+      setCurrentView('explore');
+      handleSelectPlaylist(matchedPlaylist);
+      return;
+    }
+
+    // Structural Fallback routing based on notification type and keywords
+    if (n.type === 'video' || text.includes('lecture') || text.includes('video') || text.includes('lesson')) {
+      setCurrentView('explore');
+      setActiveExploreTab('lecture');
+    } else if (text.includes('test') || text.includes('exam')) {
+      setCurrentView('explore');
+      setActiveExploreTab('tests');
+    } else if (text.includes('batch') || text.includes('cohort')) {
+      setCurrentView('explore');
+      setActiveExploreTab('batches');
+    } else if (n.type === 'follow' || text.includes('educator') || text.includes('follow')) {
+      setCurrentView('explore');
+      setActiveExploreTab('teachers');
+    } else if (n.type === 'review' || text.includes('trust score') || text.includes('rating') || text.includes('review')) {
+      setCurrentView('profile');
+    } else {
+      setCurrentView('explore');
+      setActiveExploreTab('home');
+    }
+  };
 
   const handleSelectPlaylist = async (p: Playlist) => {
     setIsLoadingLectures(true);
@@ -347,6 +536,18 @@ function AppContent() {
     }
   }, [user, isGuest, loading]);
 
+  // Real-time Played Video Feedback Loop
+  useEffect(() => {
+    if (activeLecture && user) {
+      const watched = user.watchedContent || [];
+      if (!watched.includes(activeLecture.id)) {
+        updatePreferences({
+          watchedContent: [...watched, activeLecture.id]
+        }).catch(err => console.warn('History tracking failed:', err));
+      }
+    }
+  }, [activeLecture, user]);
+
   const handleFollowToggle = async (t: TeacherProfile) => {
     if (isGuest || !user) {
       setAuthModalOpen(true);
@@ -370,30 +571,150 @@ function AppContent() {
   // Filter application arrays through server search hits or local fallbacks
   const searchActive = searchQuery.trim() !== '';
 
-  const filteredTeachers = (searchActive
-    ? serverSearchResults.filter(r => r.type === 'teacher')
-    : teachers.filter(t => {
-        const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.subject.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesSubject = subjectFilter === 'All' || t.subject === subjectFilter;
-        const matchesExam = examFilter === 'All' || t.exams?.includes(examFilter as any);
-        return matchesSearch && matchesSubject && matchesExam;
-      }).sort((a, b) => {
-        if (sortBy === 'rating') return b.rating - a.rating;
-        if (sortBy === 'trustScore') return b.trustScore - a.trustScore;
-        return b.followersCount - a.followersCount;
-      })).filter(t => !verifiedOnly || (t.isVerified !== false && t.verified !== false && t.verificationStatus !== 'pending'));
+  const filteredTeachers = personalizeTeachers(
+    searchActive
+      ? (serverSearchResults.filter(r => r.type === 'teacher') as any[])
+      : teachers.filter(t => {
+          const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.subject.toLowerCase().includes(searchQuery.toLowerCase());
+          const matchesSubject = subjectFilter === 'All' || t.subject === subjectFilter;
+          const matchesExam = examFilter === 'All' || t.exams?.includes(examFilter as any);
+          return matchesSearch && matchesSubject && matchesExam;
+        }),
+    user,
+    examFilter,
+    subjectFilter
+  ).sort((a, b) => {
+    if (sortBy === 'rating') return b.rating - a.rating;
+    if (sortBy === 'trustScore') return b.trustScore - a.trustScore;
+    return b.followersCount - a.followersCount;
+  }).filter(t => !verifiedOnly || (t.isVerified !== false && t.verified !== false && t.verificationStatus !== 'pending'));
 
-  const filteredLectures = (searchActive
-    ? serverSearchResults.filter(r => r.type === 'lecture')
+  const getOneShotLecturesPerChapter = (list: Lecture[]): Lecture[] => {
+    // 1. Filter out lectures that don't have thumbnails or are short < 30m or strategy/clickbait
+    let validList = list.filter(l => 
+      l.thumbnailUrl && 
+      l.thumbnailUrl.trim() !== '' &&
+      !isDurationBelow30Minutes(l.duration) &&
+      !isStrategyOrHypeContent(l.title)
+    );
+
+    // Helper to parse duration to minutes
+    const parseDurationToMinutes = (durationStr: string): number => {
+      if (!durationStr) return 0;
+      const dLower = durationStr.toLowerCase().trim();
+      if (dLower.startsWith('pt')) {
+        let minutes = 0;
+        const hrsMatch = dLower.match(/(\d+)\s*h/);
+        if (hrsMatch) minutes += parseInt(hrsMatch[1], 10) * 60;
+        const minsMatch = dLower.match(/(\d+)\s*m/);
+        if (minsMatch) minutes += parseInt(minsMatch[1], 10);
+        return minutes;
+      }
+      let totalMinutes = 0;
+      const hourMatch = dLower.match(/(\d+)\s*h/);
+      if (hourMatch) totalMinutes += parseInt(hourMatch[1], 10) * 60;
+      const minMatch = dLower.match(/(\d+)\s*m/);
+      if (minMatch) {
+        totalMinutes += parseInt(minMatch[1], 10);
+      } else if (!hourMatch) {
+         const parts = dLower.split(':');
+         if (parts.length === 3) {
+           totalMinutes += parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+         } else if (parts.length === 2) {
+           totalMinutes += parseInt(parts[0], 10);
+         } else {
+           const numericOnly = parseInt(dLower.replace(/[^\d]/g, ''), 10);
+           if (!isNaN(numericOnly)) totalMinutes = numericOnly;
+         }
+      }
+      return totalMinutes;
+    };
+
+    // Group by chapter
+    const groups: Record<string, Lecture[]> = {};
+
+    const guessChapter = (title: string): string => {
+      const tLower = title.toLowerCase();
+      const commonChapters = [
+        "electrostatics", "current electricity", "magnetic effects", "induction", 
+        "alternating current", "optics", "wave optics", "dual nature", "atoms", 
+        "nuclei", "semiconductors", "kinematics", "laws of motion", "work power", 
+        "rotational motion", "gravitation", "thermodynamics", "oscillations", "waves",
+        "atomic structure", "chemical bonding", "states of matter", "equilibrium", 
+        "redox", "coordination", "goc", "organic chemistry", "hydrocarbons", "amino", 
+        "haloalkane", "haloarene", "alcohol", "phenol", "ether", "aldehyde", "ketone",
+        "carboxylic", "biomolecule", "polymer", "solid state", "solution", 
+        "electrochemistry", "kinetics", "surface chemistry", "diversity", "biology",
+        "plant physiology", "human physiology", "reproduction", "genetics", "evolution"
+      ];
+      for (const ch of commonChapters) {
+        if (tLower.includes(ch)) return ch;
+      }
+      return '';
+    };
+
+    validList.forEach(l => {
+      let chName = (l.chapter || guessChapter(l.title)).trim();
+      if (!chName) {
+        chName = l.title.replace(/(?:part|pt|lecture|l|class|chap|chapter|part-|pt-)\s*([0-9]+)/ig, '').trim();
+      }
+      const key = chName.toLowerCase();
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(l);
+    });
+
+    const bestLectures: Lecture[] = [];
+    Object.keys(groups).forEach(key => {
+      const candidates = groups[key];
+      if (candidates.length === 0) return;
+
+      // Sort candidate videos:
+      // Priority 1: Prefer full length lectures longer than 3 hours (180 minutes)
+      // Priority 2: Sort descending by duration
+      // Priority 3: Sort descending by views count
+      candidates.sort((a, b) => {
+        const durA = parseDurationToMinutes(a.duration);
+        const durB = parseDurationToMinutes(b.duration);
+
+        const over3HrsA = durA >= 180 ? 1 : 0;
+        const over3HrsB = durB >= 180 ? 1 : 0;
+
+        if (over3HrsA !== over3HrsB) {
+          return over3HrsB - over3HrsA; // Over 3 hrs comes first!
+        }
+        if (durA !== durB) {
+          return durB - durA; // Longest first!
+        }
+        return (b.viewsCount || 0) - (a.viewsCount || 0); // Most viewed fallback
+      });
+
+      bestLectures.push(candidates[0]);
+    });
+
+    return bestLectures;
+  };
+
+  const rawFilteredLectures = (searchActive
+    ? (serverSearchResults.filter(r => r.type === 'lecture') as any[])
     : lectures.filter(l => {
-        const matchesSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase()) || l.teacherName.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesSubject = subjectFilter === 'All' || l.subject === subjectFilter;
-        const matchesExam = examFilter === 'All' || l.examType === examFilter || l.examType === 'Both';
+        // Simple filter of content type before personalization sorting
         const matchesContent = contentTypeFilter === 'All' || 
           l.contentType === contentTypeFilter || 
           (contentTypeFilter === 'lecture' && l.contentType === 'playlist');
-        return matchesSearch && matchesSubject && matchesExam && matchesContent;
-      })).filter(l => !verifiedOnly || (l.verified !== false));
+        return matchesContent;
+      })).filter(l => l.verified === true || l.verificationStatus === 'verified');
+
+  const personalizedRawLectures = personalizeLectures(
+    rawFilteredLectures,
+    user,
+    examFilter,
+    subjectFilter,
+    searchQuery
+  );
+
+  const filteredLectures = getOneShotLecturesPerChapter(personalizedRawLectures);
 
   const filteredInstitutes = (searchActive
     ? serverSearchResults.filter(r => r.type === 'institute')
@@ -403,19 +724,24 @@ function AppContent() {
         return matchesSearch && matchesExam;
       })).filter(inst => !verifiedOnly || (inst.isVerified !== false && inst.verified !== false));
 
-  const filteredPlaylists = (searchActive
-    ? serverSearchResults.filter(r => r.type === 'playlist')
-    : playlists.filter(p => {
-        const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesSubject = subjectFilter === 'All' || p.subject === subjectFilter;
-        const matchesExam = examFilter === 'All' || p.examType === examFilter || p.examType === 'Both';
-        return matchesSearch && matchesSubject && matchesExam;
-      })).filter(p => !verifiedOnly || (p.verified !== false));
+  const filteredPlaylists = personalizePlaylists(
+    searchActive
+      ? (serverSearchResults.filter(r => r.type === 'playlist') as any[])
+      : playlists,
+    user,
+    examFilter,
+    subjectFilter,
+    searchQuery
+  );
 
   const filteredBatches = (searchActive
     ? serverSearchResults.filter(r => r.type === 'batch')
     : batches.filter(b => {
         const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.description.toLowerCase().includes(searchQuery.toLowerCase());
+        const currentExam = examFilter !== 'All' ? examFilter : (user?.examType || 'Both');
+        if (currentExam !== 'Both' && currentExam !== 'All' && b.examType && b.examType !== 'Both' && b.examType !== 'All' && b.examType !== currentExam) {
+          return false;
+        }
         const matchesExam = examFilter === 'All' || b.examType === examFilter || b.examType === 'Both';
         const matchesSubject = subjectFilter === 'All' || b.subject === subjectFilter;
         return matchesSearch && matchesExam && matchesSubject;
@@ -462,6 +788,45 @@ function AppContent() {
     );
   }
 
+  // Intercept and open notifications view in absolute clean full screen with zero outer margin layouts
+  if (currentView === 'notifications') {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-white selection:text-black">
+        <NotificationsDashboard
+          notifications={notifications}
+          onDismiss={handleNotificationDismiss}
+          onNotificationClick={handleNotificationClick}
+          onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+          onViewDashboard={(view) => {
+            if (view === 'explore') {
+              handleBackNavigation();
+            } else {
+              setCurrentView(view as any);
+            }
+          }}
+          onOpenAuth={() => setAuthModalOpen(true)}
+        />
+        {/* Active review portals */}
+        {detailModal && (
+          <DetailsModal
+            isOpen={!!detailModal}
+            onClose={handleBackNavigation}
+            targetType={detailModal.type}
+            targetId={detailModal.id}
+            onSelectLecture={(lec) => {
+              setActiveLecture(lec);
+              setCurrentView('explore');
+            }}
+          />
+        )}
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-brand-black text-brand-accent flex flex-col font-sans selection:bg-white selection:text-black">
       
@@ -495,6 +860,7 @@ function AppContent() {
         searchVal={searchQuery}
         activeExploreTab={activeExploreTab}
         onOpenAuth={() => setAuthModalOpen(true)}
+        notifications={notifications}
       />
 
       <main className="flex-1 pb-32">
@@ -506,7 +872,7 @@ function AppContent() {
               <div className="flex items-center justify-between pb-4 border-b border-[#1A1A1A]">
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setCurrentView('explore')}
+                    onClick={handleBackNavigation}
                     className="p-2 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-full transition-colors cursor-pointer shrink-0 animate-pulse"
                     title="Back to Discovery Hub"
                   >
@@ -722,9 +1088,29 @@ function AppContent() {
                                       )}
                                     </div>
                                     <p className="text-[10px] text-zinc-400 font-mono">By {lec.teacherName}</p>
+                                    {(lec as any).recommendationReason && (
+                                      <div className="text-[9px] text-[#A855F7] font-mono bg-[#A855F7]/5 border border-[#A855F7]/15 px-2 py-0.5 rounded-lg inline-block max-w-full">
+                                        ✨ {(lec as any).recommendationReason}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex justify-between items-center text-[9px] font-mono mt-1">
                                     <span className="text-zinc-500">{lec.viewsCount?.toLocaleString()} Views</span>
+                                    {user && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const hidden = user.hiddenContent || [];
+                                          updatePreferences({
+                                            hiddenContent: [...hidden, lec.id]
+                                          }).catch(err => console.warn('Could not hide recommendation:', err));
+                                        }}
+                                        title="Hide content"
+                                        className="text-zinc-500 hover:text-red-400 p-1 rounded hover:bg-neutral-900 transition-colors cursor-pointer"
+                                      >
+                                        <EyeOff className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -919,49 +1305,18 @@ function AppContent() {
               onOpenTeacher={(teacherId) => setDetailModal({ id: teacherId, type: 'teacher' })}
               activeLecture={activeLecture}
             />
-          ) : currentView === 'notifications' ? (
-            <NotificationsDashboard
-              onViewDashboard={setCurrentView}
-              onOpenAuth={() => setAuthModalOpen(true)}
-            />
-          ) : currentView === 'recommendations' ? (
-            <RecommendationsHub
-              onSelectLecture={(lec) => {
-                setActiveLecture(lec);
-                setCurrentView('explore');
-              }}
-              activeLecture={activeLecture}
-            />
-          ) : currentView === 'moderator' && (user?.role === 'admin' || user?.role === 'moderator') ? (
+          ) : currentView === 'moderator' && user?.email === 'adarshaman898@gmail.com' ? (
             <ModeratorDashboard />
           ) : (
             // Explore View (Main Discovery Screen)
             <>
               {activeLecture ? (
                 /* Dedicated Video Player View (Plays in its own clean page to prevent design collapse) */
-                <div className="min-h-[80vh] flex flex-col pt-6 pb-24 text-left">
-                  {/* Elegant navigation path back button */}
-                  <div className="max-w-7xl mx-auto w-full px-4 mb-4 flex items-center justify-between">
-                    <button
-                      onClick={() => {
-                        window.scrollTo({ top: 0, behavior: 'instant' });
-                        setActiveLecture(null);
-                      }}
-                      className="py-1.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors border border-neutral-800"
-                    >
-                      ← Back to Channel
-                    </button>
-                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-[#141415] border border-neutral-900 px-3 py-1 rounded-full">
-                      Exam Type: {activeLecture.examType || 'GENERAL'}
-                    </span>
-                  </div>
+                <div className="min-h-[80vh] flex flex-col pb-24 text-left">
                   <div className="w-full">
                     <VideoPlayer
                       lecture={activeLecture}
-                      onClose={() => {
-                        window.scrollTo({ top: 0, behavior: 'instant' });
-                        setActiveLecture(null);
-                      }}
+                      onClose={handleBackNavigation}
                       playlistLectures={lectures.filter(l => l.playlistId === activeLecture.playlistId)}
                       onSelectLecture={setActiveLecture}
                     />
@@ -1501,7 +1856,7 @@ function AppContent() {
       {detailModal && (
         <DetailsModal
           isOpen={!!detailModal}
-          onClose={() => setDetailModal(null)}
+          onClose={handleBackNavigation}
           targetType={detailModal.type}
           targetId={detailModal.id}
           onSelectLecture={(lec) => {
@@ -1519,11 +1874,8 @@ function AppContent() {
 
       {/* Onboarding gateway portal for first-time visits */}
       <OnboardingGateway
-        onComplete={(exam, year) => {
-          setExamFilter(exam);
-          if (user && setExamPreference) {
-            setExamPreference(exam).catch(err => console.warn('Could not update profile exam preference:', err));
-          }
+        onOpenAuth={(mode) => {
+          setAuthModalOpen(true);
         }}
       />
 
@@ -1542,59 +1894,6 @@ function AppContent() {
         verifiedOnly={verifiedOnly}
         setVerifiedOnly={setVerifiedOnly}
       />
-
-      {/* Global generic minimal footer - straight-line aligned with identical layout styling to Header */}
-      <footer className="w-full bg-[#000000] h-16 border-t border-[#1A1A1A] px-4 sm:px-6 md:px-8 flex flex-row items-center justify-between text-[11px] font-mono text-zinc-500 mt-auto select-none gap-4">
-        <p className="hidden xs:block text-zinc-500">© 2026 Biovised Portal</p>
-        <p className="xs:hidden text-zinc-500">© 2026 Biovised</p>
-
-        {/* Sleek, interactive animated icons group */}
-        <div className="flex items-center gap-4.5">
-          <motion.div
-            whileHover={{ scale: 1.3, rotate: 12, color: '#10B981' }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 12 }}
-            className="cursor-pointer text-zinc-600 transition-colors"
-            title="Secure Encryption Verification"
-          >
-            <ShieldCheck className="w-4 h-4" />
-          </motion.div>
-
-          <motion.div
-            whileHover={{ scale: 1.3, rotate: -12, color: '#3B82F6' }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 12 }}
-            className="cursor-pointer text-zinc-600 transition-colors"
-            title="Global Sync Node"
-          >
-            <Globe className="w-4 h-4" />
-          </motion.div>
-
-          <motion.div
-            whileHover={{ scale: 1.3, rotate: 15, color: '#EAB308' }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 12 }}
-            className="cursor-pointer text-zinc-600 transition-colors"
-            title="Decentralized Trust Signals"
-          >
-            <Sparkles className="w-4 h-4" />
-          </motion.div>
-
-          <motion.div
-            whileHover={{ scale: 1.3, rotate: -15, color: '#EF4444' }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 12 }}
-            className="cursor-pointer text-zinc-600 transition-colors"
-            title="Real-Time Node Telemetry"
-          >
-            <Activity className="w-4 h-4" />
-          </motion.div>
-        </div>
-
-        <p className="text-[10px] text-zinc-600 text-right truncate max-w-[150px] sm:max-w-none">
-          Decentralized Trust Synced
-        </p>
-      </footer>
 
     </div>
   );

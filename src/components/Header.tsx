@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react';
+import { Search, Bell, LogOut, User as UserIcon, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Search, Bell, LogOut, User as UserIcon, ShieldAlert, BookOpen } from 'lucide-react';
-import { fetchNotifications, markNotificationAsRead } from '../services/dbService';
 import { AppNotification } from '../types';
 
 interface HeaderProps {
   onSearchChange: (query: string) => void;
   onSearchSubmit?: () => void;
-  onViewDashboard: (dashboard: 'explore' | 'profile' | 'moderator' | 'recommendations' | 'notifications' | 'search') => void;
-  currentView: 'explore' | 'profile' | 'moderator' | 'recommendations' | 'notifications' | 'search';
+  onViewDashboard: (dashboard: 'explore' | 'profile' | 'moderator' | 'notifications' | 'search') => void;
+  currentView: 'explore' | 'profile' | 'moderator' | 'notifications' | 'search';
   searchVal: string;
   onOpenAuth: () => void;
   activeExploreTab?: string;
+  notifications: AppNotification[];
 }
 
 export default function Header({
@@ -21,28 +20,11 @@ export default function Header({
   currentView,
   searchVal,
   onOpenAuth,
-  activeExploreTab
+  activeExploreTab,
+  notifications
 }: HeaderProps) {
-  const { user, logout, isGuest } = useAuth();
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
-
-  // Synchronize notifications if logged in
-  useEffect(() => {
-    if (user) {
-      fetchNotifications().then(data => {
-        setNotifications(data);
-        setHasUnread(data.some(n => !n.read));
-      });
-    }
-  }, [user]);
-
-  const handleReadNotification = async (id: string) => {
-    await markNotificationAsRead(id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    setHasUnread(notifications.some(n => n.id !== id && !n.read));
-  };
+  const { user, isGuest } = useAuth();
+  const hasUnread = notifications.some(n => !n.read);
 
   const shouldRedirectToSearch = currentView !== 'explore' || !activeExploreTab || activeExploreTab === 'home';
 
@@ -98,7 +80,7 @@ export default function Header({
         {user ? (
           <>
             {/* Moderator/Admin shortcut queue trigger */}
-            {(user.role === 'admin' || user.role === 'moderator') && (
+            {user?.email === 'adarshaman898@gmail.com' && (
               <button
                 onClick={() => onViewDashboard('moderator')}
                 className={`h-10 px-3 rounded-full border transition-all flex items-center gap-1.5 text-[10px] font-mono cursor-pointer ${
@@ -109,7 +91,7 @@ export default function Header({
                 title="Moderation Console"
               >
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                <span className="hidden leading-none lg:inline capitalize">{user.role}</span>
+                <span className="hidden leading-none lg:inline capitalize">Admin</span>
               </button>
             )}
 

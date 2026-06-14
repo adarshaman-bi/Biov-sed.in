@@ -160,6 +160,115 @@ app.get('/api/youtube/channels', (req, res) => {
   res.json({ status: 'ok', data: VERIFIED_CHANNELS });
 });
 
+app.get('/api/youtube/channel-info', async (req, res) => {
+  const { videoId } = req.query;
+  if (!videoId || typeof videoId !== 'string') {
+    return res.status(400).json({ error: 'Missing videoId parameter.' });
+  }
+
+  // 1. Try to fetch from server-side cache (adminDb) if initialized
+  if (adminDb) {
+    try {
+      const docRef = adminDb.collection('channel_icons').doc(videoId);
+      const snapshot = await docRef.get();
+      if (snapshot.exists) {
+        return res.json({ status: 'ok', data: snapshot.data(), cached: true });
+      }
+    } catch (e) {
+      console.warn("Firestore channel-info check failed, continuing:", e);
+    }
+  }
+
+  // 2. Fetch from YouTube or oEmbed fallback
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  const isDemo = !apiKey || apiKey === 'YOUR_YOUTUBE_DATA_API_V3_KEY' || apiKey.startsWith('MY_') || apiKey.length < 5;
+
+  let channelTitle = 'Verified Educator';
+  let avatarUrl = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=100&auto=format&fit=crop&q=80'; // high fidelity fallback
+  let channelId = '';
+
+  if (!isDemo) {
+    try {
+      // Step A: Get video snippet to get channelId and channelTitle
+      const videoUrlRes = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`;
+      const videoRes = await fetch(videoUrlRes);
+      if (videoRes.ok) {
+        const videoPayload = await videoRes.json();
+        const videoItem = videoPayload.items?.[0];
+        if (videoItem) {
+          channelId = videoItem.snippet?.channelId || '';
+          channelTitle = videoItem.snippet?.channelTitle || channelTitle;
+          
+          if (channelId) {
+            // Step B: Get channel snippet to get channel avatar thumbnails
+            const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${apiKey}`;
+            const channelRes = await fetch(channelUrl);
+            if (channelRes.ok) {
+              const channelPayload = await channelRes.json();
+              const channelItem = channelPayload.items?.[0];
+              if (channelItem) {
+                avatarUrl = channelItem.snippet?.thumbnails?.medium?.url || channelItem.snippet?.thumbnails?.default?.url || avatarUrl;
+              }
+            }
+          }
+        }
+      }
+    } catch (apiError) {
+      console.error("YouTube API fetch failed during channel-info seek:", apiError);
+    }
+  }
+
+  // Fallback oEmbed parsing if YouTube API is in demo mode or fails
+  if (!channelId || channelTitle === 'Verified Educator') {
+    try {
+      const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+      if (oembedRes.ok) {
+        const oembedData = await oembedRes.json();
+        if (oembedData.author_name) {
+          channelTitle = oembedData.author_name;
+        }
+      }
+    } catch (oembedError) {
+      console.warn("oEmbed fallback retrieval failed:", oembedError);
+    }
+  }
+
+  // Choose a beautiful dynamic illustration avatar matching channel theme
+  if (isDemo || !channelId) {
+    const cleanName = channelTitle.toLowerCase();
+    if (cleanName.includes('physics) wallah') || cleanName.includes('pw') || cleanName.includes('alakh')) {
+      avatarUrl = 'https://images.unsplash.com/photo-1607990283143-e81e7a2c93ab?w=100&auto=format&fit=crop&q=80';
+    } else if (cleanName.includes('unacademy')) {
+      avatarUrl = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&auto=format&fit=crop&q=80';
+    } else if (cleanName.includes('allen')) {
+      avatarUrl = 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&auto=format&fit=crop&q=80';
+    } else if (cleanName.includes('vedantu')) {
+      avatarUrl = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=100&auto=format&fit=crop&q=80';
+    } else {
+      avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(channelTitle)}&background=18181b&color=f97316&size=128&bold=true`;
+    }
+  }
+
+  const resultData = {
+    videoId,
+    channelId,
+    channelTitle,
+    avatarUrl,
+    updatedAt: new Date().toISOString()
+  };
+
+  // Save to Server cache (adminDb) for next time
+  if (adminDb) {
+    try {
+      await adminDb.collection('channel_icons').doc(videoId).set(resultData, { merge: true });
+    } catch (dbSaveError) {
+      console.warn("Firebase channel_icons cache saving failed:", dbSaveError);
+    }
+  }
+
+  res.json({ status: 'ok', data: resultData, cached: false });
+});
+
 // Helper: Parse ISO 8601 duration to friendly string (e.g., PT1H15M10S -> '1h 15m')
 function parseISODuration(duration: string): string {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -229,8 +338,14 @@ app.get('/api/youtube/playlists', async (req, res) => {
 
     res.json({ status: 'ok', isDemo: false, data: filtered });
   } catch (error: any) {
-    console.error('YouTube Proxy Playlists Error:', error);
-    res.status(500).json({ status: 'error', error: error.message });
+    console.error('YouTube Proxy Playlists Error (activating sandbox fallback):', error);
+    const playlists = DEMO_PLAYLISTS[channelId] || [];
+    res.json({
+      status: 'ok',
+      isDemo: true,
+      data: playlists,
+      message: `Demo Sandbox Payload loaded after YouTube API error: ${error.message}`
+    });
   }
 });
 
@@ -244,7 +359,10 @@ app.get('/api/youtube/lectures', async (req, res) => {
   const apiKey = process.env.YOUTUBE_API_KEY;
   const isDemo = !apiKey || apiKey === 'YOUR_YOUTUBE_DATA_API_V3_KEY' || apiKey.startsWith('MY_') || apiKey.length < 5;
 
-  if (isDemo) {
+  const serveDemoFallback = async (warnMessage?: string) => {
+    if (warnMessage) {
+      console.warn(`[YouTube API Fallback triggered] Reason: ${warnMessage}`);
+    }
     let lectures = DEMO_LECTURES[playlistId] || [];
     if (lectures.length === 0) {
       let subject = "Physics";
@@ -434,8 +552,14 @@ app.get('/api/youtube/lectures', async (req, res) => {
       status: 'ok',
       isDemo: true,
       data: lectures,
-      message: 'Demo Sandbox Payload loaded with realistic live YouTube links.'
+      message: warnMessage 
+        ? `Demo Sandbox Payload loaded gracefully after error: ${warnMessage}` 
+        : 'Demo Sandbox Payload loaded with realistic live YouTube links.'
     });
+  };
+
+  if (isDemo) {
+    return serveDemoFallback();
   }
 
   try {
@@ -494,8 +618,8 @@ app.get('/api/youtube/lectures', async (req, res) => {
       data: filteredLectures
     });
   } catch (error: any) {
-    console.error('YouTube Proxy Lectures Error:', error);
-    res.status(500).json({ status: 'error', error: error.message });
+    console.error('YouTube Proxy Lectures Error (activating sandbox fallback):', error);
+    return serveDemoFallback(error.message);
   }
 });
 

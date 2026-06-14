@@ -15,7 +15,10 @@ import {
   fetchIngestionControl,
   fetchFlaggedReviews,
   unflagReview,
-  deleteReview
+  deleteReview,
+  fetchLectures,
+  updateLectureVerification,
+  isStrategyOrHypeContent
 } from '../services/dbService';
 import { ModerationReport, TeacherProfile, InstituteProfile, Playlist, Lecture, IngestionLog, IngestionControl, Review } from '../types';
 import { getPlaylistThumbnail } from '../services/thumbnailHelper';
@@ -42,14 +45,25 @@ import {
   FileText,
   List,
   CheckCircle,
-  Activity
+  Activity,
+  BookOpen,
+  Play
 } from 'lucide-react';
 
 export default function ModeratorDashboard() {
   const { user } = useAuth();
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'reports' | 'youtube' | 'verification'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'youtube' | 'verification' | 'lectures'>('reports');
+
+  // Lectures tab states
+  const [lecturesForApproval, setLecturesForApproval] = useState<Lecture[]>([]);
+  const [lecturesForApprovalLoading, setLecturesForApprovalLoading] = useState(false);
+  const [lectureApprovalFilter, setLectureApprovalFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
+  const [lectureSearchQuery, setLectureSearchQuery] = useState('');
+  const [lectureApprovalError, setLectureApprovalError] = useState<string | null>(null);
+  const [approvalFeedback, setApprovalFeedback] = useState<string | null>(null);
+  const [previewLectureUrl, setPreviewLectureUrl] = useState<string | null>(null);
 
   // Reports tab states
   const [reports, setReports] = useState<ModerationReport[]>([]);
@@ -218,6 +232,40 @@ export default function ModeratorDashboard() {
       loadFlaggedReviews();
     }
   }, [activeTab, user]);
+
+  const loadLecturesForApproval = async () => {
+    setLecturesForApprovalLoading(true);
+    setLectureApprovalError(null);
+    try {
+      const data = await fetchLectures({ includeUnverified: true });
+      setLecturesForApproval(data);
+    } catch (err: any) {
+      setLectureApprovalError(err.message || 'Failed to load system lectures.');
+    } finally {
+      setLecturesForApprovalLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'lectures' && user) {
+      loadLecturesForApproval();
+    }
+  }, [activeTab, user]);
+
+  const handleVerifyLectureStatus = async (lectureId: string, status: 'verified' | 'pending' | 'rejected') => {
+    setApprovalFeedback(null);
+    try {
+      const isVerified = status === 'verified';
+      await updateLectureVerification(lectureId, isVerified, status);
+      setApprovalFeedback(`Lecture status successfully updated to: ${status.toUpperCase()}`);
+      setLecturesForApproval(prev =>
+        prev.map(l => l.id === lectureId ? { ...l, verified: isVerified, verificationStatus: status } : l)
+      );
+      setTimeout(() => setApprovalFeedback(null), 4000);
+    } catch (err: any) {
+      setLectureApprovalError(err.message || 'Failed to update lecture status.');
+    }
+  };
 
   const handleUnflagReview = async (reviewId: string) => {
     try {
@@ -1212,7 +1260,7 @@ export default function ModeratorDashboard() {
     }
   };
 
-  if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
+  if (!user || user.email !== 'adarshaman898@gmail.com') {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center text-rose-400 font-mono">
         ACCESS DENIED. System administrative privileges required to view the moderation console.
@@ -1246,7 +1294,7 @@ export default function ModeratorDashboard() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTab('reports')}
             className={`text-xs px-3 sm:px-4 py-2 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all ${
@@ -1272,6 +1320,14 @@ export default function ModeratorDashboard() {
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Profiler & Verification
+          </button>
+          <button
+            onClick={() => setActiveTab('lectures')}
+            className={`text-xs px-3 sm:px-4 py-2 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center gap-1 bg-zinc-800 text-zinc-400 border border-zinc-700/50 hover:text-white ${
+              activeTab === 'lectures' ? 'ring-2 ring-orange-500 text-white bg-zinc-950' : ''
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-sky-400" /> Lectures Approval
           </button>
         </div>
       </div>
@@ -2498,6 +2554,315 @@ export default function ModeratorDashboard() {
 
           </div>
 
+        </div>
+      )}
+
+      {activeTab === 'lectures' && (
+        <div className="space-y-6">
+          {/* Header block with stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-[#101011] border border-[#1b1c1d] p-4 rounded-xl text-left">
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-500">Total System Lectures</span>
+              <p className="text-2xl font-semibold font-mono text-zinc-100 mt-1">{lecturesForApproval.length}</p>
+            </div>
+            <div className="bg-[#101011] border border-[#1b1c1d] p-4 rounded-xl text-left">
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-emerald-500">Verified & Approved</span>
+              <p className="text-2xl font-semibold font-mono text-emerald-400 mt-1">
+                {lecturesForApproval.filter(l => l.verified === true || l.verificationStatus === 'verified').length}
+              </p>
+            </div>
+            <div className="bg-[#101011] border border-[#1b1c1d] p-4 rounded-xl text-left">
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-amber-500">Pending Review</span>
+              <p className="text-2xl font-semibold font-mono text-amber-400 mt-1">
+                {lecturesForApproval.filter(l => !l.verificationStatus || l.verificationStatus === 'pending').length}
+              </p>
+            </div>
+            <div className="bg-[#101011] border border-[#1b1c1d] p-4 rounded-xl text-left">
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-rose-500">Rejected / Blocked</span>
+              <p className="text-2xl font-semibold font-mono text-rose-400 mt-1">
+                {lecturesForApproval.filter(l => l.verificationStatus === 'rejected').length}
+              </p>
+            </div>
+          </div>
+
+          {/* Feedback message banner */}
+          {approvalFeedback && (
+            <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-mono text-center">
+              ✔ {approvalFeedback}
+            </div>
+          )}
+
+          {lectureApprovalError && (
+            <div className="p-3 bg-rose-955/40 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-mono text-center">
+              ❌ {lectureApprovalError}
+            </div>
+          )}
+
+          {/* Filters and search tools */}
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#101011] border border-neutral-900 p-4 rounded-xl">
+            <div className="flex flex-wrap gap-2 w-full md:w-auto">
+              {(['all', 'pending', 'verified', 'rejected'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setLectureApprovalFilter(mode)}
+                  className={`text-xs font-mono py-1.5 px-4 rounded-lg border uppercase transition-all cursor-pointer ${
+                    lectureApprovalFilter === mode
+                      ? 'border-sky-500 bg-sky-950/40 text-sky-400 font-bold'
+                      : 'border-zinc-800 bg-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            <div className="w-full md:w-80">
+              <input
+                type="text"
+                placeholder="Search lectures/educator..."
+                value={lectureSearchQuery}
+                onChange={(e) => setLectureSearchQuery(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-sky-500/50"
+              />
+            </div>
+          </div>
+
+          {/* Lectures Approval Grid list */}
+          {lecturesForApprovalLoading ? (
+            <div className="py-20 text-center font-mono text-sm text-zinc-500 animate-pulse">
+              Retrieving entire system lecture databases...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {(() => {
+                const queryList = lecturesForApproval.filter(l => {
+                  const mSearch = l.title.toLowerCase().includes(lectureSearchQuery.toLowerCase()) || 
+                                  l.teacherName.toLowerCase().includes(lectureSearchQuery.toLowerCase());
+                  const mStatus = lectureApprovalFilter === 'all' || 
+                                  (lectureApprovalFilter === 'pending' && (!l.verificationStatus || l.verificationStatus === 'pending')) ||
+                                  (lectureApprovalFilter === 'verified' && (l.verified === true || l.verificationStatus === 'verified')) ||
+                                  (lectureApprovalFilter === 'rejected' && l.verificationStatus === 'rejected');
+                  return mSearch && mStatus;
+                });
+
+                if (queryList.length === 0) {
+                  return (
+                    <div className="py-16 text-center border-2 border-dashed border-zinc-850 rounded-xl bg-zinc-950/10 text-zinc-550 font-mono text-sm">
+                      No matching system lectures found.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 gap-4">
+                    {queryList.map((item) => {
+                      const mins = (() => {
+                        const durStr = (item.duration || '').toLowerCase().trim();
+                        if (durStr.startsWith('pt')) {
+                          let mVal = 0;
+                          const h = durStr.match(/(\d+)\s*h/);
+                          if (h) mVal += parseInt(h[1], 10) * 60;
+                          const m = durStr.match(/(\d+)\s*m/);
+                          if (m) mVal += parseInt(m[1], 10);
+                          return mVal;
+                        }
+                        let tot = 0;
+                        const hr = durStr.match(/(\d+)\s*h/);
+                        if (hr) tot += parseInt(hr[1], 10) * 60;
+                        const mn = durStr.match(/(\d+)\s*m/);
+                        if (mn) {
+                          tot += parseInt(mn[1], 10);
+                        } else if (!hr) {
+                          const pts = durStr.split(':');
+                          if (pts.length === 3) tot += parseInt(pts[0], 10) * 60 + parseInt(pts[1], 10);
+                          else if (pts.length === 2) tot += parseInt(pts[0], 10);
+                        }
+                        return tot;
+                      })();
+
+                      const clickbait = isStrategyOrHypeContent(item.title);
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="bg-[#101011] border border-neutral-900 hover:border-zinc-800 transition-all rounded-xl p-5 flex flex-col md:flex-row gap-5 items-start text-left"
+                        >
+                          {/* Miniature Video Aspect Ratio Frame */}
+                          <div className="relative aspect-video w-full md:w-44 bg-zinc-950 rounded-lg overflow-hidden shrink-0 border border-neutral-900">
+                            {item.thumbnailUrl ? (
+                              <img src={item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-500 font-mono">
+                                No Thumbnail
+                              </div>
+                            )}
+                            <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-[9px] font-mono px-1.5 py-0.5 rounded text-zinc-300 font-bold block">
+                              {item.duration}
+                            </span>
+                          </div>
+
+                          {/* Details Workspace Panel */}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <span className="bg-zinc-800 text-zinc-300 text-[8px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
+                                  {item.subject}
+                                </span>
+                                <span className="bg-zinc-800 text-zinc-400 text-[8px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
+                                  {item.examType}
+                                </span>
+                                <span className="bg-[#141415] text-[#2DD4BF] text-[8px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
+                                  {item.contentType}
+                                </span>
+                              </div>
+                              <h3 className="text-xs font-semibold text-zinc-100 font-mono tracking-tight leading-snug">
+                                {item.title}
+                              </h3>
+                              <p className="text-[10px] text-zinc-450 font-mono mt-0.5">
+                                Educator: <span className="text-zinc-350">{item.teacherName}</span> • Chapter: <span className="text-zinc-350">{item.chapter || 'N/A'}</span>
+                              </p>
+                            </div>
+
+                            {/* Automated Invariants & Clickbait Checks */}
+                            <div className="flex flex-wrap gap-1.5 py-1">
+                              {/* Status indicators */}
+                              {(!item.verificationStatus || item.verificationStatus === 'pending') && (
+                                <span className="bg-amber-955/40 border border-amber-600/40 text-amber-400 text-[9px] font-mono px-2 py-0.5 rounded flex items-center gap-1 font-semibold">
+                                  ● PENDING APPROVAL
+                                </span>
+                              )}
+                              {(item.verified === true || item.verificationStatus === 'verified') && (
+                                <span className="bg-emerald-955/40 border border-emerald-600/40 text-emerald-400 text-[9px] font-mono px-2 py-0.5 rounded flex items-center gap-1 font-semibold">
+                                  ✓ APPROVED & LIVE
+                                </span>
+                              )}
+                              {item.verificationStatus === 'rejected' && (
+                                <span className="bg-rose-955/45 border border-rose-600/40 text-rose-450 text-[9px] font-mono px-2 py-0.5 rounded flex items-center gap-1 font-semibold">
+                                  ✗ REJECTED / BLOCKED
+                                </span>
+                              )}
+
+                              {/* Thumbnail Check */}
+                              {item.thumbnailUrl ? (
+                                <span className="bg-emerald-950/20 border border-emerald-500/10 text-emerald-500 text-[8px] font-mono px-2 py-0.5 rounded">
+                                  ✔ THUMBNAIL VALID
+                                </span>
+                              ) : (
+                                <span className="bg-rose-955/20 border border-rose-500/20 text-rose-400 text-[8px] font-mono px-2 py-0.5 rounded leading-none">
+                                  ⚠ THUMBNAIL MISSING
+                                </span>
+                              )}
+
+                              {/* Duration validation check */}
+                              {mins >= 180 ? (
+                                <span className="bg-sky-950/40 border border-sky-500/40 text-sky-400 text-[8px] font-mono font-bold px-2 py-0.5 rounded">
+                                  ⭐ FULL LENGTH ({Math.floor(mins / 60)}h {mins % 60}m)
+                                </span>
+                              ) : mins < 30 ? (
+                                <span className="bg-rose-955/40 border border-rose-500/45 text-rose-400 text-[8px] font-mono px-2 py-0.5 rounded font-semibold leading-none animate-pulse">
+                                  🚨 BLOCKED: SHORT VIDEO ({mins}m)
+                                </span>
+                              ) : (
+                                <span className="bg-zinc-900 border border-zinc-800 text-zinc-400 text-[8px] font-mono px-2 py-0.5 rounded">
+                                  OK: LECTURE LENGTH ({mins}m)
+                                </span>
+                              )}
+
+                              {/* Clickbait content validation */}
+                              {clickbait ? (
+                                <span className="bg-rose-955/40 border border-rose-500/45 text-rose-300 text-[8px] font-mono px-2 py-0.5 rounded font-semibold leading-none animate-pulse">
+                                  🚨 clickbait/strategy
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-950/10 border border-emerald-500/10 text-emerald-500 text-[8px] font-mono px-2 py-0.5 rounded">
+                                  ✔ TITLE REPUTATIVE
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Control actions */}
+                          <div className="flex md:flex-col gap-2 w-full md:w-auto self-stretch justify-center items-stretch shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                let rawId = '';
+                                if (item.videoUrl.includes('embed/')) {
+                                  rawId = item.videoUrl.split('embed/')[1]?.split('?')[0];
+                                } else if (item.videoUrl.includes('v=')) {
+                                  rawId = item.videoUrl.split('v=')[1]?.split('&')[0];
+                                }
+                                if (rawId) {
+                                  setPreviewLectureUrl(`https://www.youtube.com/embed/${rawId}`);
+                                } else {
+                                  setPreviewLectureUrl(item.videoUrl);
+                                }
+                              }}
+                              className="px-4 py-2 font-mono text-[10px] rounded bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:text-white text-zinc-300 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Play className="w-3 h-3 text-sky-450" /> PREVIEW VIDEO
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyLectureStatus(item.id, 'verified')}
+                              className="px-4 py-2 font-mono text-[10px] font-bold rounded bg-emerald-600/35 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              APPROVE
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyLectureStatus(item.id, 'rejected')}
+                              className="px-4 py-2 font-mono text-[10px] font-bold rounded bg-rose-600/20 hover:bg-rose-600 border border-rose-600/40 text-rose-450 hover:text-white transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              DECLINE
+                            </button>
+
+                            {item.verificationStatus !== 'pending' && (
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyLectureStatus(item.id, 'pending')}
+                                className="px-4 py-2 font-mono text-[10px] rounded bg-amber-600/20 hover:bg-amber-600/35 border border-amber-600/35 text-amber-300 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                RESET TO PENDING
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Video Preview Overlay Modal */}
+          {previewLectureUrl && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+              <div className="bg-[#101011] border border-neutral-900 rounded-xl max-w-2xl w-full p-4 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-widest">Lecture Quality Inspector</span>
+                  <button
+                    onClick={() => setPreviewLectureUrl(null)}
+                    className="text-zinc-500 hover:text-white font-mono text-xs cursor-pointer border border-[#1b1c1d] px-2 py-1 rounded"
+                  >
+                    ✕ CLOSE INSPECTOR
+                  </button>
+                </div>
+                <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border border-neutral-950">
+                  <iframe
+                    src={`${previewLectureUrl}?autoplay=1&rel=0`}
+                    title="Lecture Inspector Player Preview"
+                    className="absolute inset-0 w-full h-full border-0 animate-fade-in"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
