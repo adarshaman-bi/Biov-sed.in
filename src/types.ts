@@ -52,6 +52,7 @@ export interface InstituteProfile {
   id: string;
   name: string;
   logo: string;
+  bannerUrl?: string;
   description: string;
   rating: number;
   reviewCount: number;
@@ -67,6 +68,20 @@ export interface InstituteProfile {
   verificationProvenance?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface LectureWithChannelDTO {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  channel: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+    bannerUrl: string | null;
+    subscriberCountRaw: number;
+    subscriberCountFormatted: string;
+  };
 }
 
 export interface Lecture {
@@ -104,28 +119,90 @@ export interface Lecture {
 }
 
 export interface Playlist {
-  id: string;
+  id: string; // matches playlistId
+  playlistId?: string; // backup reference
   title: string;
   description: string;
   thumbnailUrl: string;
-  teacherId: string;
-  teacherName: string;
-  instituteId?: string;
-  instituteName?: string;
+  thumbnail?: string; // backup for 'thumbnail' field name
+  channelId?: string;
+  channelName?: string;
+  videoCount?: number;
+  lecturesCount: number;
+  publishedAt?: string;
+  createdAt: string;
+  lastSynced?: string;
+  updatedAt?: string;
   subject: string;
   examType: 'JEE' | 'NEET' | 'Both' | string;
-  lecturesCount: number;
-  createdAt: string;
+  examTypes?: string[];
+  examTags?: string[];
+  isActive?: boolean;
+  importStatus?: 'pending' | 'imported' | 'failed' | string;
 
   // 1.5 data model support
   youtubePlaylistId?: string;
-  channelId?: string;
-  examTypes?: string[];
+  teacherId?: string;
+  teacherName?: string;
+  instituteId?: string;
+  instituteName?: string;
   subject_db?: string | null;
   teacherRef?: string | null;
   sourceUrl?: string;
   verified?: boolean;
-  updatedAt?: string;
+}
+
+export interface YouTubeChannel {
+  id: string; // channelId
+  channelId: string;
+  channelName: string;
+  channelHandle: string;
+  channelThumbnail: string;
+  subscriberCount: number;
+  description: string;
+  addedBy: string;
+  addedAt: string;
+  lastSynced: string;
+  isActive: boolean;
+  tags: string[];
+  totalVideos: number;
+  totalPlaylists: number;
+}
+
+export interface YouTubeVideo {
+  id: string; // videoId
+  videoId: string;
+  playlistId: string;
+  channelId: string;
+  channelName: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  duration: string;
+  durationSeconds: number;
+  publishedAt: string;
+  viewCount: number;
+  likeCount: number;
+  position: number;
+  subject: string;
+  topic: string;
+  examTags: string[];
+  chapter?: string;
+  isActive: boolean;
+  importedAt: string;
+}
+
+export interface YouTubeSyncLog {
+  id: string;
+  type: 'channel' | 'playlist' | 'video' | string;
+  targetId: string;
+  status: 'success' | 'failed' | 'partial' | string;
+  videosImported: number;
+  playlistsImported: number;
+  apiUnitsUsed: number;
+  error?: string;
+  triggeredBy: string;
+  timestamp: string;
 }
 
 export interface IngestionLog {
@@ -165,6 +242,7 @@ export interface Batch {
   link?: string;
   verified?: boolean;
   createdAt: string;
+  imageUrl?: string;
 }
 
 export interface Review {
@@ -172,7 +250,7 @@ export interface Review {
   userId: string;
   userDisplayName: string;
   targetId: string; // Teacher ID or Institute ID
-  targetType: 'teacher' | 'institute';
+  targetType: 'teacher' | 'institute' | 'testSeries';
   rating: number;
   comment: string;
   trustImpact: number;
@@ -188,7 +266,7 @@ export interface Review {
   flagged?: boolean;
 }
 
-export interface TrustScoreBreakdown {
+export interface EntityTrustScoreBreakdown {
   entityId: string;
   profileCompleteness: number; // 0-3 (3% max)
   verifiedCredentials: number; // 0-14 (Student Completion 14% max)
@@ -238,3 +316,69 @@ export interface AppNotification {
   read: boolean;
   createdAt: string;
 }
+
+export type ExamTag = "NEET" | "JEE Main" | "JEE Advanced" | "CUET";
+
+export interface ReviewSnippet {
+  text: string;          // <=15 words, paraphrased in your own words — never copy-paste
+  author?: string;        // first name/initial only if shown publicly
+  source: string;          // e.g. "Google Reviews", "Play Store", "Justdial"
+  sourceUrl: string;
+  date?: string;           // ISO date if shown
+}
+
+export interface TrustScoreBreakdown {
+  ratingScore: number;       // 0-40
+  reviewVolumeScore: number; // 0-25
+  longevityScore: number;    // 0-15
+  transparencyScore: number; // 0-10
+  sourceDiversityScore: number; // 0-10
+  total: number;             // sum, 0-100
+}
+
+export interface TestSeriesEntry {
+  id: string;                 // slug, e.g. "allen-aiats-offline"
+  name: string;                // exact product name
+  provider: string;            // parent brand
+  type: "online" | "offline";
+  examTags: ExamTag[];
+  shortDescription: string;    // <=20 words, plain language
+  longDescription: string;     // 3-4 sentences, plain language
+  testFormat: "OMR" | "Online Proctored" | "App-based" | "Hybrid";
+  testCount: number | null;
+  syllabusCoverage: string[];
+  validity: string | null;
+  price: { amount: number; currency: "INR"; unit?: string } | "free" | "bundled" | null;
+  languages: string[];
+  features: string[];          // e.g. ["All India Rank", "Video Solutions"]
+  bannerUrl: string | null;
+  thumbnailUrl: string | null;
+  imageSourceUrl: string | null;
+  officialUrl: string;
+  locations?: string[];        // offline only
+  rating: number | null;       // 0-5
+  reviewCount: number | null;
+  reviews: ReviewSnippet[];     // 0-3
+  trustScore: number | null;    // 0-100
+  trustScoreBreakdown: TrustScoreBreakdown | null;
+  verifiedDate: string;          // ISO date research was done
+  needsManualVerification: boolean;
+  verificationNotes?: string;
+
+  // Compatibility fields
+  delivery?: "online" | "offline";
+  examType?: string;
+  examsCovered?: string[];
+  oneLineDescription?: string;
+  description?: string;
+  isVerified?: boolean;
+  logo?: string;
+  officialLinks?: string[];
+  centers?: string[];
+  subjects?: string[];
+  dateChecked?: string;
+}
+
+export type TestSeries = TestSeriesEntry;
+export type TestSeriesReview = ReviewSnippet;
+

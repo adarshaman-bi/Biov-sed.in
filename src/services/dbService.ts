@@ -22,13 +22,16 @@ import {
   Playlist,
   Batch,
   Review,
-  TrustScoreBreakdown,
+  EntityTrustScoreBreakdown as TrustScoreBreakdown,
   WatchHistoryItem,
   ModerationReport,
   AppNotification,
   UserProfile,
   IngestionLog,
-  IngestionControl
+  IngestionControl,
+  YouTubeChannel,
+  YouTubeVideo,
+  YouTubeSyncLog
 } from '../types';
 
 // USERS SERVICE
@@ -346,34 +349,68 @@ export async function fetchBatchById(id: string): Promise<Batch | null> {
   }
 }
 
-// REVIEWS SERVICE
-export async function fetchReviews(targetId: string): Promise<Review[]> {
-  if (!targetId) return [];
-  const path = 'reviews';
+// Helper to read local reviews safely (Node/client environment proof)
+function getLocalReviews(targetId: string): Review[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
   try {
-    const q = query(collection(db, 'reviews'), where('targetId', '==', targetId));
-    const snap = await getDocs(q);
-    const reviews = snap.docs.map(d => d.data() as Review);
-    return reviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
+    const raw = localStorage.getItem(`local_reviews_${targetId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    console.warn("localStorage read failed:", err);
     return [];
   }
 }
 
+// Helper to write local reviews safely
+function saveLocalReview(targetId: string, review: Review) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const current = getLocalReviews(targetId);
+    const updated = [review, ...current.filter(r => r.id !== review.id)];
+    localStorage.setItem(`local_reviews_${targetId}`, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("localStorage write failed:", err);
+  }
+}
+
+// REVIEWS SERVICE
+export async function fetchReviews(targetId: string): Promise<Review[]> {
+  if (!targetId) return [];
+  let fbReviews: Review[] = [];
+  try {
+    const q = query(collection(db, 'reviews'), where('targetId', '==', targetId));
+    const snap = await getDocs(q);
+    fbReviews = snap.docs.map(d => d.data() as Review);
+  } catch (error) {
+    console.warn("Firestore fetchReviews failed (using local or offline):", error);
+  }
+
+  const local = getLocalReviews(targetId);
+  const mergedMap = new Map<string, Review>();
+  fbReviews.forEach(r => mergedMap.set(r.id, r));
+  local.forEach(r => mergedMap.set(r.id, r));
+
+  const reviews = Array.from(mergedMap.values());
+  return reviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export async function submitReview(reviewData: Omit<Review, 'id' | 'createdAt' | 'userId' | 'userDisplayName'> & { lectureId?: string }): Promise<void> {
   const user = auth.currentUser;
-  if (!user) throw new Error('Authentican required to leave a review.');
-
-  const reviewId = `${user.uid}_${reviewData.targetId}_${reviewData.lectureId || 'general'}`;
+  const userId = user ? user.uid : 'guest_student';
+  const displayName = user ? (user.displayName || 'Verified Pupil') : 'Guest Student';
+  
+  const reviewId = user 
+    ? `${user.uid}_${reviewData.targetId}_${reviewData.lectureId || 'general'}_${Date.now()}`
+    : `guest_${Date.now()}_${reviewData.targetId}`;
+    
   const path = `reviews/${reviewId}`;
   try {
     const now = new Date().toISOString();
     const newReview: Review = {
       ...reviewData,
       id: reviewId,
-      userId: user.uid,
-      userDisplayName: user.displayName || 'Verified Pupil',
+      userId: userId,
+      userDisplayName: displayName,
       createdAt: now,
       
       // Phase 4 compliance:
@@ -381,14 +418,24 @@ export async function submitReview(reviewData: Omit<Review, 'id' | 'createdAt' |
       teacherRef: reviewData.targetType === 'teacher' ? `/teachers/${reviewData.targetId}` : null,
       source: 'platform',
       sourceCommentId: null,
-      userIdOrHandle: user.displayName || user.email || user.uid,
+      userIdOrHandle: displayName,
       text: reviewData.comment,
       flagged: false
-    };
+    } as any;
 
-    await setDoc(doc(db, 'reviews', reviewId), newReview);
+    // Save locally first so it is instant
+    saveLocalReview(reviewData.targetId, newReview);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('reviewAdded'));
+    }
+
+    // Sync to Firestore if authenticated
+    if (user) {
+      await setDoc(doc(db, 'reviews', reviewId), newReview);
+    }
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn("Firestore reviews sync skipped:", error);
   }
 }
 
@@ -463,7 +510,7 @@ export async function recalibrateTrustScore(entityId: string, entityType: 'teach
   let bioText = '';
   let subjectsList: string[] = [];
   let socialLinksExist = false;
-  let overallRating = 4.0;
+  let overallRating = 0;
   
   if (entityType === 'teacher') {
     const docSnap = await getDoc(doc(db, 'teachers', entityId));
@@ -475,7 +522,6 @@ export async function recalibrateTrustScore(entityId: string, entityType: 'teach
       socialLinksExist = (data.socialProfiles && data.socialProfiles.length > 0) || 
                          (data.officialLinks && data.officialLinks.length > 0) || 
                          !!data.officialWebsite;
-      overallRating = data.rating || 4.2;
     }
   } else {
     const docSnap = await getDoc(doc(db, 'institutes', entityId));
@@ -485,7 +531,6 @@ export async function recalibrateTrustScore(entityId: string, entityType: 'teach
       bioText = data.description || '';
       subjectsList = data.exams || [];
       socialLinksExist = (data.officialLinks && data.officialLinks.length > 0);
-      overallRating = data.rating || 4.5;
     }
   }
   
@@ -506,12 +551,15 @@ export async function recalibrateTrustScore(entityId: string, entityType: 'teach
   
   if (verifiedStudentReviews.length > 0) {
     const avgRating = verifiedStudentReviews.reduce((sum, r) => sum + r.rating, 0) / verifiedStudentReviews.length;
+    overallRating = avgRating;
     reviewReliability = Math.round((avgRating / 5.0) * 40);
   } else if (reviews.length > 0) {
     const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+    overallRating = avgRating;
     reviewReliability = Math.round((avgRating / 5.0) * 32); // Slight weight penalty for lack of verified student status
   } else {
-    reviewReliability = Math.round((overallRating / 5.0) * 36); // Fallback representation from profile rating
+    overallRating = 0;
+    reviewReliability = 0; // No real reviews => zero score contribution
   }
   
   // 5. Content Consistency (1% max)
@@ -986,6 +1034,133 @@ export async function updateLectureVerification(
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
+// NEW YOUTUBE IMPORTER CLIENT SERVICES
+
+export async function fetchAllChannels(): Promise<YouTubeChannel[]> {
+  const path = 'channels';
+  try {
+    const snap = await getDocs(query(collection(db, 'channels'), orderBy('addedAt', 'desc')));
+    return snap.docs.map(doc => doc.data() as YouTubeChannel);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+export async function saveChannel(channel: YouTubeChannel): Promise<void> {
+  const path = `channels/${channel.id}`;
+  try {
+    await setDoc(doc(db, 'channels', channel.id), channel);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
+}
+
+export async function deleteChannel(channelId: string): Promise<void> {
+  const path = `channels/${channelId}`;
+  try {
+    await deleteDoc(doc(db, 'channels', channelId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
+export async function fetchPlaylistsForAdmin(filters?: { channelId?: string; importStatus?: string }): Promise<Playlist[]> {
+  const path = 'playlists';
+  try {
+    let q = query(collection(db, 'playlists'), orderBy('createdAt', 'desc'));
+    if (filters?.channelId) {
+      q = query(collection(db, 'playlists'), where('channelId', '==', filters.channelId));
+    }
+    const snap = await getDocs(q);
+    let playlists = snap.docs.map(doc => doc.data() as Playlist);
+    if (filters?.importStatus) {
+      playlists = playlists.filter(p => p.importStatus === filters.importStatus);
+    }
+    return playlists;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+export async function savePlaylistAdmin(playlist: Playlist): Promise<void> {
+  const path = `playlists/${playlist.id}`;
+  try {
+    await setDoc(doc(db, 'playlists', playlist.id), playlist);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
+}
+
+export async function fetchAllVideos(filters?: { playlistId?: string; subject?: string }): Promise<YouTubeVideo[]> {
+  const path = 'videos';
+  try {
+    let q = query(collection(db, 'videos'), orderBy('importedAt', 'desc'));
+    if (filters?.playlistId) {
+      q = query(collection(db, 'videos'), where('playlistId', '==', filters.playlistId));
+    }
+    const snap = await getDocs(q);
+    let videos = snap.docs.map(doc => doc.data() as YouTubeVideo);
+    if (filters?.subject) {
+      videos = videos.filter(v => v.subject.toLowerCase() === filters.subject!.toLowerCase());
+    }
+    return videos;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+export async function saveVideo(video: YouTubeVideo): Promise<void> {
+  const path = `videos/${video.id}`;
+  try {
+    await setDoc(doc(db, 'videos', video.id), video);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
+}
+
+export async function saveVideosBatch(videos: YouTubeVideo[]): Promise<void> {
+  const path = 'videos-batch';
+  try {
+    const batch = writeBatch(db);
+    videos.forEach((video) => {
+      batch.set(doc(db, 'videos', video.id), video);
+    });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
+}
+
+export async function fetchAllYouTubeSyncLogs(): Promise<YouTubeSyncLog[]> {
+  const path = 'syncLogs';
+  try {
+    const q = query(collection(db, 'syncLogs'), orderBy('timestamp', 'desc'), limit(50));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => doc.data() as YouTubeSyncLog);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+export async function saveYouTubeSyncLog(log: YouTubeSyncLog): Promise<void> {
+  const path = `syncLogs/${log.id}`;
+  try {
+    await setDoc(doc(db, 'syncLogs', log.id), log);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
     throw error;
   }
 }

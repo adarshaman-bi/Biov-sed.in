@@ -27,11 +27,17 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'admin';
+      return isSignedIn() && (
+        (request.auth.token.email == "adarshaman898@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'admin')
+      );
     }
 
     function isModerator() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserRole() == 'moderator' || getUserRole() == 'admin');
+      return isSignedIn() && (
+        (request.auth.token.email == "adarshaman898@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserRole() == 'moderator' || getUserRole() == 'admin'))
+      );
     }
 
     function isEducator() {
@@ -113,7 +119,7 @@ service cloud.firestore {
              data.userId == request.auth.uid &&
              (data.rating == null || (data.rating >= 1 && data.rating <= 5)) &&
              data.comment is string && data.comment.size() <= 2000 &&
-             data.targetType in ['teacher', 'institute'];
+             data.targetType in ['teacher', 'institute', 'testSeries'];
     }
 
     function isValidRating(data) {
@@ -254,12 +260,14 @@ service cloud.firestore {
 
     // Playlists directory
     match /playlists/{playlistId} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // Specialized OneShot full-chapter items
     match /oneshots/{oneshotId} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // Subjects system database records Catalog (Admins/moderators managed)
@@ -334,6 +342,24 @@ service cloud.firestore {
       allow create: if (isModerator() || isAdmin()) && isValidId(controlId) && isValidIngestionControl(incoming());
       allow update: if (isModerator() || isAdmin()) && isValidId(controlId) && isValidIngestionControl(incoming());
       allow delete: if isAdmin();
+    }
+
+    // Curated YouTube Channels (Public read, admin/moderator write)
+    match /channels/{channelId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Curated YouTube Videos (Public read, admin/moderator write)
+    match /videos/{videoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Operation synchronization logs (Admin/moderator only)
+    match /syncLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
   }

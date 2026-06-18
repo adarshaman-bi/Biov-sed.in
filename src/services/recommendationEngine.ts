@@ -46,7 +46,7 @@ export function personalizeLectures(
   if (!lectures) return [];
 
   // 1. Get current preference values
-  const userExam = user?.examType || 'Both';
+  const userExam = user?.examType || 'NEET';
   const userYear = user?.appearingYear || '2026';
   const userSubjects = user?.preferredSubjects || [];
   const hiddenIds = user?.hiddenContent || [];
@@ -55,7 +55,7 @@ export function personalizeLectures(
   const likedIds = user?.likedContent || [];
 
   // Determine active exam context: preferred user selection or explicit toggle
-  const currentExam = activeExamFilter !== 'All' ? activeExamFilter : userExam;
+  const currentExam = activeExamFilter && activeExamFilter !== 'All' ? activeExamFilter : userExam;
   const sQuery = searchQuery.trim().toLowerCase();
 
   return lectures
@@ -85,13 +85,7 @@ export function personalizeLectures(
       // i.e., JEE student should not see Biology, NEET student should not see Mathematics
       if (currentExam !== 'Both' && currentExam !== 'All') {
         if (!isSubjectRelevantForExam(l.subject, currentExam)) {
-          // Check if subject is explicitly chosen as custom preferredSubject, if so, we can bypass
-          const isExplicitlyPreferred = userSubjects.some(
-            prefSub => prefSub.toLowerCase().includes(l.subject.toLowerCase())
-          );
-          if (!isExplicitlyPreferred) {
-            return false;
-          }
+          return false;
         }
 
         // If lecture is explicitly for NEET and active exam is JEE, hide it (and vice versa)
@@ -217,13 +211,13 @@ export function personalizePlaylists(
 ): PersonalizedPlaylist[] {
   if (!playlists) return [];
 
-  const userExam = user?.examType || 'Both';
+  const userExam = user?.examType || 'NEET';
   const userYear = user?.appearingYear || '2026';
   const userSubjects = user?.preferredSubjects || [];
   const hiddenIds = user?.hiddenContent || [];
   const savedIds = user?.savedContent || [];
 
-  const currentExam = activeExamFilter !== 'All' ? activeExamFilter : userExam;
+  const currentExam = activeExamFilter && activeExamFilter !== 'All' ? activeExamFilter : userExam;
   const sQuery = searchQuery.trim().toLowerCase();
 
   return playlists
@@ -244,10 +238,7 @@ export function personalizePlaylists(
 
       if (currentExam !== 'Both' && currentExam !== 'All') {
         if (!isSubjectRelevantForExam(p.subject, currentExam)) {
-          const isExplicitlyPreferred = userSubjects.some(
-            sub => sub.toLowerCase().includes(p.subject.toLowerCase())
-          );
-          if (!isExplicitlyPreferred) return false;
+          return false;
         }
 
         if (p.examType && p.examType !== 'Both' && p.examType !== 'All') {
@@ -288,9 +279,9 @@ export function personalizeTeachers(
 ): TeacherProfile[] {
   if (!teachers) return [];
 
-  const userExam = user?.examType || 'Both';
+  const userExam = user?.examType || 'NEET';
   const userSubjects = user?.preferredSubjects || [];
-  const currentExam = activeExamFilter !== 'All' ? activeExamFilter : userExam;
+  const currentExam = activeExamFilter && activeExamFilter !== 'All' ? activeExamFilter : userExam;
 
   return teachers.filter(t => {
     // Subject align
@@ -305,12 +296,16 @@ export function personalizeTeachers(
       const isMath = t.subject.toLowerCase().includes('math') || t.subject.toLowerCase() === 'mathematics';
       
       if (currentExam === 'JEE' && isBio) {
-        const isExplicitlyPreferred = userSubjects.some(sub => sub.toLowerCase().includes('biology'));
-        if (!isExplicitlyPreferred) return false;
+        return false;
       }
       if (currentExam === 'NEET' && isMath) {
-        const isExplicitlyPreferred = userSubjects.some(sub => sub.toLowerCase().includes('mathem'));
-        if (!isExplicitlyPreferred) return false;
+        return false;
+      }
+
+      // Also filter by teacher's certified exams if specified:
+      if (t.exams && t.exams.length > 0) {
+        const matchesExam = t.exams.includes(currentExam) || t.exams.includes('Both') || t.exams.includes('All');
+        if (!matchesExam) return false;
       }
     }
 

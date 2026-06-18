@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SearchProvider, useSearch } from './context/SearchContext';
 import Header from './components/Header';
-import Hero from './components/Hero';
+import LectureCard from './components/LectureCard';
+import TestSeriesDirectory from './components/TestSeriesDirectory';
+import { TEST_SERIES_CATALOG } from './data/testSeriesData';
+import HomeDashboard from './components/HomeDashboard';
 import VideoPlayer from './components/VideoPlayer';
 import DetailsModal from './components/DetailsModal';
+import { DynamicRating } from './components/DynamicRating';
 import ProfileDashboard from './components/ProfileDashboard';
 import ModeratorDashboard from './components/ModeratorDashboard';
 import AuthModal from './components/AuthModal';
@@ -17,7 +22,7 @@ import {
   personalizeTeachers
 } from './services/recommendationEngine';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import {
   fetchTeachers,
   fetchInstitutes,
@@ -32,7 +37,9 @@ import {
   isStrategyOrHypeContent,
   isDurationBelow30Minutes
 } from './services/dbService';
-import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch, AppNotification } from './types';
+import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch, AppNotification, YouTubeVideo } from './types';
+import YoutubeThumbnailImg from './components/YoutubeThumbnailImg';
+import VideoLibrary from './components/VideoLibrary';
 import {
   Star,
   Award,
@@ -62,15 +69,105 @@ import {
   X,
   SlidersHorizontal,
   EyeOff,
-  Clock
+  Clock,
+  Mic
 } from 'lucide-react';
 import { getPlaylistThumbnail, getLectureThumbnail } from './services/thumbnailHelper';
+import { BatchCard } from './components/BatchCard';
+import { InstituteCard } from './components/InstituteCard';
+
+function LectureCardSkeleton() {
+  return (
+    <div className="bg-[#0E0E10] border border-zinc-900/90 rounded-2xl overflow-hidden flex flex-col justify-between h-full animate-pulse select-none">
+      <div className="relative aspect-video bg-zinc-900/40" />
+      <div className="p-4 space-y-3.5 flex-grow flex flex-col justify-between">
+        <div className="space-y-2">
+          <div className="h-3 bg-zinc-900/70 rounded w-5/6" />
+          <div className="h-3 bg-zinc-900/70 rounded w-2/3" />
+          <span className="flex items-center gap-2 pt-2">
+            <span className="w-5 h-5 bg-zinc-900/70 rounded-full shrink-0" />
+            <span className="h-2.5 bg-zinc-900/70 rounded w-2/5" />
+          </span>
+        </div>
+        <span className="h-2.5 bg-zinc-900/40 rounded w-1/4 pt-1" />
+      </div>
+    </div>
+  );
+}
+
+function TeacherCardSkeleton() {
+  return (
+    <div className="bg-[#111111] rounded-2xl p-6 flex flex-col justify-between gap-4 border border-zinc-900 animate-pulse select-none">
+      <div className="space-y-3.5">
+        <div className="flex justify-between items-start">
+          <div className="w-12 h-12 rounded-full bg-zinc-900/70" />
+          <div className="w-14 h-4 bg-zinc-900/70 rounded" />
+        </div>
+        <div className="space-y-2">
+          <div className="h-3 bg-zinc-900/70 rounded w-2/3" />
+          <div className="h-2.5 bg-zinc-900/70 rounded w-1/3" />
+        </div>
+        <div className="h-10 bg-zinc-900/40 rounded w-full" />
+      </div>
+      <div className="pt-3.5 border-t border-[#262626] flex gap-2">
+        <div className="h-7 bg-zinc-900/60 rounded-full flex-1" />
+        <div className="h-7 bg-zinc-900/60 rounded-full w-14" />
+      </div>
+    </div>
+  );
+}
+
+function BatchCardSkeleton() {
+  return (
+    <div className="bg-[#111111] rounded-2xl p-5 border border-zinc-900/80 animate-pulse space-y-4 select-none">
+      <div className="flex justify-between items-start">
+        <div className="space-y-2 flex-grow">
+          <div className="h-3.5 bg-zinc-900/70 rounded w-3/4" />
+          <div className="h-2.5 bg-zinc-900/70 rounded w-1/2" />
+        </div>
+        <div className="w-12 h-5 bg-zinc-900/70 rounded" />
+      </div>
+      <div className="space-y-2.5">
+        <div className="h-2 bg-zinc-900/50 rounded w-full" />
+        <div className="h-2 bg-zinc-900/50 rounded w-5/6" />
+      </div>
+      <div className="pt-4 border-t border-zinc-900/75 flex justify-between">
+        <div className="h-3 bg-zinc-900/60 rounded w-1/4" />
+        <div className="h-3 bg-zinc-900/40 rounded w-1/4" />
+      </div>
+    </div>
+  );
+}
+
+function InstituteCardSkeleton() {
+  return (
+    <div className="bg-[#111111] border border-zinc-900 rounded-2xl p-5 animate-pulse flex flex-col justify-between h-full gap-4 select-none">
+      <div className="flex items-start gap-4">
+        <div className="w-14 h-14 bg-zinc-900/70 rounded-xl shrink-0" />
+        <div className="space-y-2 flex-1 min-w-0 pt-1">
+          <div className="h-3.5 bg-zinc-900/70 rounded w-3/4" />
+          <div className="h-2.5 bg-zinc-900/70 rounded w-1/3" />
+        </div>
+      </div>
+      <div className="h-10 bg-zinc-900/40 rounded w-full" />
+    </div>
+  );
+}
 
 function AppContent() {
   const { user, isGuest, enableGuestMode, loading, setExamPreference, updatePreferences } = useAuth();
 
   // Control splash screen layers (shows on initial session load)
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      return !sessionStorage.getItem('biovised_splash_shown');
+    } catch {
+      return true;
+    }
+  });
+
+  // Control initial loading state to prevent flash layout shifts
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // Control core view layers
   const [currentView, setCurrentView] = useState<'explore' | 'profile' | 'moderator' | 'notifications' | 'search'>('explore');
@@ -85,47 +182,40 @@ function AppContent() {
   const [detailModal, setDetailModal] = useState<{ id: string; type: 'teacher' | 'institute' } | null>(null);
   const [specsModalOpen, setSpecsModalOpen] = useState(false);
 
-  // Database loaded sets with instantaneous offline/cache state recovery
-  const [teachers, setTeachers] = useState<TeacherProfile[]>(() => {
+  // Database loaded sets initialized to safe empty arrays to prevent hydration mismatches
+  const [teachers, setTeachers] = useState<TeacherProfile[]>([]);
+  const [institutes, setInstitutes] = useState<InstituteProfile[]>([]);
+  const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+
+  // Safely restore cached datasets on initial client-only mount
+  useEffect(() => {
     try {
-      const cached = localStorage.getItem('biovised_cached_teachers');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
+      const cachedTeachers = localStorage.getItem('biovised_cached_teachers');
+      if (cachedTeachers) setTeachers(JSON.parse(cachedTeachers));
+
+      const cachedInstitutes = localStorage.getItem('biovised_cached_institutes');
+      if (cachedInstitutes) setInstitutes(JSON.parse(cachedInstitutes));
+
+      const cachedLectures = localStorage.getItem('biovised_cached_lectures');
+      if (cachedLectures) setLectures(JSON.parse(cachedLectures));
+
+      const cachedPlaylists = localStorage.getItem('biovised_cached_playlists');
+      if (cachedPlaylists) setPlaylists(JSON.parse(cachedPlaylists));
+
+      const cachedBatches = localStorage.getItem('biovised_cached_batches');
+      if (cachedBatches) setBatches(JSON.parse(cachedBatches));
+
+      const cachedExam = localStorage.getItem('biovised_onboarding_exam');
+      if (cachedExam) {
+        setExamFilter(cachedExam);
+        setTestExamTag(cachedExam);
+      }
+    } catch (e) {
+      console.warn("Error restoring local cached datasets:", e);
     }
-  });
-  const [institutes, setInstitutes] = useState<InstituteProfile[]>(() => {
-    try {
-      const cached = localStorage.getItem('biovised_cached_institutes');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [lectures, setLectures] = useState<Lecture[]>(() => {
-    try {
-      const cached = localStorage.getItem('biovised_cached_lectures');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [playlists, setPlaylists] = useState<Playlist[]>(() => {
-    try {
-      const cached = localStorage.getItem('biovised_cached_playlists');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [batches, setBatches] = useState<Batch[]>(() => {
-    try {
-      const cached = localStorage.getItem('biovised_cached_batches');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
+  }, []);
   const [followedIds, setFollowedIds] = useState<string[]>([]);
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
 
@@ -133,7 +223,7 @@ function AppContent() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || user.uid === 'guest') {
       setNotifications([]);
       return;
     }
@@ -146,6 +236,11 @@ function AppContent() {
       setNotifications(data);
     }, (error) => {
       console.warn('Real-time notifications exception bypassed:', error);
+      try {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}/notifications`);
+      } catch (err) {
+        // log silent
+      }
     });
     return () => unsubscribe();
   }, [user]);
@@ -372,16 +467,113 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Dynamic search / filters state
-  const [searchQuery, setSearchQuery] = useState('');
+  // Dynamic search / filters state from Global Context-Aware Search Architecture
+  const { searchQuery, setSearchQuery, activeCategory, setActiveCategory } = useSearch();
+
+  // Sync active category inside the context whenever page view or class category tab changes
+  useEffect(() => {
+    const activeSegment = currentView === 'explore' ? activeExploreTab : currentView;
+    setActiveCategory(activeSegment);
+  }, [currentView, activeExploreTab, setActiveCategory]);
+
+  // Dedicated Test section filters state
+  const [testExamTag, setTestExamTag] = useState<string>('ALL');
+  const [testDelivery, setTestDelivery] = useState<string>('ALL');
+  const [testVerification, setTestVerification] = useState<string>('ALL');
+  const [testMinRating, setTestMinRating] = useState<number>(0);
+  const [testSortBy, setTestSortBy] = useState<'trustScore' | 'rating' | 'priceAsc' | 'priceDesc'>('trustScore');
+
+  // Filter panel toggle & overlay states
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser. Please try Chrome or Safari.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setSpeechError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setSearchQuery(transcript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        setSpeechError(event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
+
+  // Esc keyboard key listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSearchFocused(false);
+        setShowFilters(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const [serverSearchResults, setServerSearchResults] = useState<any[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [searchedExternal, setSearchedExternal] = useState(false);
   const [externalCount, setExternalCount] = useState(0);
 
+  // CUSTOM SEARCH COMPLIANT STATES (Searches ONLY your local Firestore /videos collection)
+  const [vidSearchSubject, setVidSearchSubject] = useState<string>('All');
+  const [vidSearchChannel, setVidSearchChannel] = useState<string>('All');
+  const [vidSearchDuration, setVidSearchDuration] = useState<string>('All');
+  const [firestoreVideos, setFirestoreVideos] = useState<YouTubeVideo[]>([]);
+  const [isSyncingVideos, setIsSyncingVideos] = useState<boolean>(false);
+
+  // Real-time synchronization with the Firestore /videos collection
+  useEffect(() => {
+    setIsSyncingVideos(true);
+    const q = query(collection(db, 'videos'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const list = snap.docs.map(doc => doc.data() as YouTubeVideo);
+      setFirestoreVideos(list);
+      setIsSyncingVideos(false);
+    }, (error) => {
+      console.error("Failed to sync videos collection:", error);
+      setIsSyncingVideos(false);
+      handleFirestoreError(error, OperationType.GET, 'videos');
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [subjectFilter, setSubjectFilter] = useState<string>('All');
-  const [examFilter, setExamFilter] = useState<string>(() => localStorage.getItem('biovised_onboarding_exam') || 'All');
+  const [examFilter, setExamFilter] = useState<string>('NEET');
   const [contentTypeFilter, setContentTypeFilter] = useState<'All' | 'lecture' | 'oneshot'>('All');
   const [sortBy, setSortBy] = useState<'rating' | 'trustScore' | 'popularity'>('trustScore');
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
@@ -397,7 +589,7 @@ function AppContent() {
     }
 
     // Fetch Prefix-Trie / Autocomplete suggestions from Live Real indexed titles
-    fetch(`/api/search/suggestions?q=${encodeURIComponent(searchQuery)}`)
+    fetch(`/api/search/suggestions?q=${encodeURIComponent(searchQuery)}&examType=${examFilter}`)
       .then(res => res.json())
       .then(data => {
         if (data.suggestions) {
@@ -427,23 +619,37 @@ function AppContent() {
     return () => clearTimeout(timeoutId);
   }, [searchQuery, examFilter, subjectFilter, contentTypeFilter, activeExploreTab]);
 
-  // Trigger splash screen timer & force redirect on finish
+  // Trigger splash screen timer & force redirect on finish when auth loading is resolved
   useEffect(() => {
-    if (showSplash) {
+    if (showSplash && !loading) {
       const timer = setTimeout(() => {
+        try {
+          sessionStorage.setItem('biovised_splash_shown', 'true');
+        } catch {}
         setShowSplash(false);
-        setCurrentView('explore');
-        setActiveExploreTab('home');
-      }, 2000);
+        // Recover state views from popstate history if they exist, instead of hard-redirecting to 'explore' / 'home'!
+        const hState = window.history.state;
+        if (hState && 'currentView' in hState) {
+          setCurrentView(hState.currentView);
+          setActiveExploreTab(hState.activeExploreTab);
+          setActiveLecture(hState.activeLecture);
+          setDetailModal(hState.detailModal);
+        } else {
+          setCurrentView('explore');
+          setActiveExploreTab('home');
+        }
+      }, 500); // 500ms snappy response once loaded
       return () => clearTimeout(timer);
     }
-  }, [showSplash]);
+  }, [showSplash, loading]);
 
-  // Sync exam preferences when logged in
+  // Sync exam preferences when logged in or guest preference is loaded/updated
   useEffect(() => {
-    if (user && user.examType && user.examType !== 'Both') {
-      localStorage.setItem('biovised_onboarding_exam', user.examType);
-      setExamFilter(user.examType);
+    if (user && user.examType) {
+      const activeExam = user.examType === 'Both' ? 'NEET' : user.examType;
+      localStorage.setItem('biovised_onboarding_exam', activeExam);
+      setExamFilter(activeExam);
+      setTestExamTag(activeExam);
     }
   }, [user]);
 
@@ -504,37 +710,52 @@ function AppContent() {
 
   // Initial load of directories (once on mount) with automatic background persistence synchronization
   useEffect(() => {
-    fetchTeachers().then(data => {
-      setTeachers(data);
-      try { localStorage.setItem('biovised_cached_teachers', JSON.stringify(data)); } catch (e) { console.warn(e); }
-    });
-    fetchInstitutes().then(data => {
-      setInstitutes(data);
-      try { localStorage.setItem('biovised_cached_institutes', JSON.stringify(data)); } catch (e) { console.warn(e); }
-    });
-    fetchLectures().then(data => {
-      setLectures(data);
-      try { localStorage.setItem('biovised_cached_lectures', JSON.stringify(data)); } catch (e) { console.warn(e); }
-    });
-    fetchPlaylists().then(data => {
-      setPlaylists(data);
-      try { localStorage.setItem('biovised_cached_playlists', JSON.stringify(data)); } catch (e) { console.warn(e); }
-    });
-    fetchBatches().then(data => {
-      setBatches(data);
-      try { localStorage.setItem('biovised_cached_batches', JSON.stringify(data)); } catch (e) { console.warn(e); }
+    Promise.all([
+      fetchTeachers().then(data => {
+        setTeachers(data);
+        try { localStorage.setItem('biovised_cached_teachers', JSON.stringify(data)); } catch (e) { console.warn(e); }
+        return data;
+      }),
+      fetchInstitutes().then(data => {
+        setInstitutes(data);
+        try { localStorage.setItem('biovised_cached_institutes', JSON.stringify(data)); } catch (e) { console.warn(e); }
+        return data;
+      }),
+      fetchLectures().then(data => {
+        setLectures(data);
+        try { localStorage.setItem('biovised_cached_lectures', JSON.stringify(data)); } catch (e) { console.warn(e); }
+        return data;
+      }),
+      fetchPlaylists().then(data => {
+        setPlaylists(data);
+        try { localStorage.setItem('biovised_cached_playlists', JSON.stringify(data)); } catch (e) { console.warn(e); }
+        return data;
+      }),
+      fetchBatches().then(data => {
+        setBatches(data);
+        try { localStorage.setItem('biovised_cached_batches', JSON.stringify(data)); } catch (e) { console.warn(e); }
+        return data;
+      })
+    ]).then(() => {
+      setIsInitialLoading(false);
+    }).catch(err => {
+      console.warn("Error resolving base datasets:", err);
+      setIsInitialLoading(false);
     });
   }, []);
 
-  // Sync user following list and handle guest mode transition
+  // Sync user following list and handle view reset on sign out
   useEffect(() => {
     if (user) {
       fetchFollowingList().then(ids => setFollowedIds(ids));
-    } else if (!isGuest && !loading) {
-      // Prompt auth or enable guest mode by default to ensure explore state
-      enableGuestMode();
+    } else if (!loading) {
+      // Completely logged out. Clear views to avoid rendering frozen dashboards.
+      setCurrentView('explore');
+      setActiveExploreTab('home');
+      setActiveLecture(null);
+      setDetailModal(null);
     }
-  }, [user, isGuest, loading]);
+  }, [user, loading]);
 
   // Real-time Played Video Feedback Loop
   useEffect(() => {
@@ -569,7 +790,7 @@ function AppContent() {
   };
 
   // Filter application arrays through server search hits or local fallbacks
-  const searchActive = searchQuery.trim() !== '';
+  const searchActive = currentView === 'search' && searchQuery.trim() !== '';
 
   const filteredTeachers = personalizeTeachers(
     searchActive
@@ -747,7 +968,16 @@ function AppContent() {
         return matchesSearch && matchesExam && matchesSubject;
       })).filter(b => !verifiedOnly || (b.verified !== false));
 
-  const filteredTestSeries: any[] = [];
+  const filteredTestSeries = (TEST_SERIES_CATALOG || []).filter(ts => {
+    const matchesSearch = ts.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          ts.provider.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          ts.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const currentExam = examFilter !== 'All' ? examFilter : (user?.examType || 'Both');
+    if (currentExam !== 'Both' && currentExam !== 'All' && ts.examType && ts.examType !== 'Both' && ts.examType !== 'All' && ts.examType !== currentExam) {
+      return false;
+    }
+    return matchesSearch;
+  });
 
   if (showSplash) {
     return (
@@ -788,44 +1018,45 @@ function AppContent() {
     );
   }
 
-  // Intercept and open notifications view in absolute clean full screen with zero outer margin layouts
-  if (currentView === 'notifications') {
-    return (
-      <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-white selection:text-black">
-        <NotificationsDashboard
-          notifications={notifications}
-          onDismiss={handleNotificationDismiss}
-          onNotificationClick={handleNotificationClick}
-          onMarkAllAsRead={handleMarkAllNotificationsAsRead}
-          onViewDashboard={(view) => {
-            if (view === 'explore') {
-              handleBackNavigation();
-            } else {
-              setCurrentView(view as any);
-            }
-          }}
-          onOpenAuth={() => setAuthModalOpen(true)}
-        />
-        {/* Active review portals */}
-        {detailModal && (
-          <DetailsModal
-            isOpen={!!detailModal}
-            onClose={handleBackNavigation}
-            targetType={detailModal.type}
-            targetId={detailModal.id}
-            onSelectLecture={(lec) => {
-              setActiveLecture(lec);
-              setCurrentView('explore');
-            }}
-          />
-        )}
-        <AuthModal
-          isOpen={authModalOpen}
-          onClose={() => setAuthModalOpen(false)}
-        />
-      </div>
-    );
-  }
+
+
+  const getCategorySuggestions = (tab: string) => {
+    switch (tab) {
+      case 'tests':
+        return ["NEET Full", "Allen Major", "JEE Main Spec", "Physics Part Test", "Calculus Suite"];
+      case 'teachers':
+        return ["HC Verma", "NV Sir", "Organic Chemistry", "Biology Expert", "Aman Sir"];
+      case 'playlists':
+        return ["11th Physics", "Inorganic Series", "JEE Advanced Maths", "Full NEET Revision"];
+      case 'batches':
+        return ["Alpha Batch", "Target 2026", "Revision Cohort", "Crash Course"];
+      case 'lecture':
+        return ["Electrostatics", "Chemical Kinetics", "Rotational Motion", "Cell Division", "Photosynthesis"];
+      case 'institutes':
+        return ["Kota Hub", "Aakash Digital", "Motion Education", "Allen Classes"];
+      default:
+        return ["Physics", "Chemistry", "Maths", "Biology"];
+    }
+  };
+
+  const getActiveSegmentMatchesCount = (tab: string) => {
+    switch (tab) {
+      case 'tests':
+        return 16;
+      case 'teachers':
+        return filteredTeachers?.length || 0;
+      case 'playlists':
+        return filteredPlaylists?.length || 0;
+      case 'batches':
+        return filteredBatches?.length || 0;
+      case 'lecture':
+        return filteredLectures?.length || 0;
+      case 'institutes':
+        return filteredInstitutes?.length || 0;
+      default:
+        return 0;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-brand-black text-brand-accent flex flex-col font-sans selection:bg-white selection:text-black">
@@ -853,183 +1084,285 @@ function AppContent() {
 
       {/* Fixed top Header segment */}
       <Header
-        onSearchChange={setSearchQuery}
+        onSearchChange={(q) => {
+          setSearchQuery(q);
+        }}
         onSearchSubmit={() => {}}
-        onViewDashboard={setCurrentView}
+        onViewDashboard={(view) => {
+          setCurrentView(view);
+          if (view === 'explore') {
+            setIsSearchFocused(false);
+          }
+        }}
         currentView={currentView}
         searchVal={searchQuery}
         activeExploreTab={activeExploreTab}
         onOpenAuth={() => setAuthModalOpen(true)}
         notifications={notifications}
+        showFilters={showFilters}
+        onToggleFilters={() => setSpecsModalOpen(true)}
+        isFilterSupported={currentView === 'explore' || currentView === 'search'}
+        onFocus={() => {
+          if (currentView === 'explore') {
+            setIsSearchFocused(true);
+          }
+        }}
+        searchSuggestions={searchSuggestions}
+        currentExamType={examFilter}
+        onVoiceSearchClick={startSpeechRecognition}
       />
 
-      <main className="flex-1 pb-32">
-          
-          {/* Main conditional views manager */}
-          {currentView === 'search' ? (
-            <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 text-left pb-24 min-h-[80vh]">
-              {/* Immersive Navigation Bar without redundant search box */}
-              <div className="flex items-center justify-between pb-4 border-b border-[#1A1A1A]">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleBackNavigation}
-                    className="p-2 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-full transition-colors cursor-pointer shrink-0 animate-pulse"
-                    title="Back to Discovery Hub"
-                  >
-                    <ArrowLeft className="w-5 h-5 text-white" />
-                  </button>
-                  <div>
-                    <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                       All-Category Global Search
-                    </h3>
-                    <p className="text-[10px] text-zinc-500 font-mono mt-0.5 leading-none">
-                      {searchQuery ? `Displaying global registry tags containing: "${searchQuery}"` : 'Type in the top header bar to query lessons, badges & educators'}
-                    </p>
-                  </div>
-                </div>
-
+      {/* Modern Slide-Down Unified Multi-Filter Panel like YouTube but tailored to tabs */}
+      <AnimatePresence>
+        {showFilters && currentView === 'explore' && (
+          <motion.div
+            id="unified-multi-filter-panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="bg-[#090909] border-b border-[#1A1A1A] overflow-hidden"
+          >
+            <div className="max-w-7xl mx-auto px-4 py-5 md:px-8 space-y-4 text-left">
+              <div className="flex justify-between items-center pb-2 border-b border-[#141414]">
+                <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 flex-row">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                  {activeExploreTab === 'tests' 
+                    ? 'Target test matrix variables' 
+                    : `Filter profile: ${activeExploreTab?.toUpperCase()}`
+                  }
+                </span>
                 <button
-                  onClick={() => setSpecsModalOpen(true)}
-                  className="px-4 py-1.5 bg-[#0F0F0F] hover:bg-zinc-900 border border-[#1F1F1F] rounded-full text-xs font-mono font-bold text-white flex items-center gap-2 cursor-pointer shrink-0 transition-colors"
-                  title="Search Filters / Specifications"
+                  onClick={() => {
+                    const defaultExam = user?.examType === 'Both' ? 'NEET' : (user?.examType || 'NEET');
+                    if (activeExploreTab === 'tests') {
+                      setTestExamTag(defaultExam);
+                      setTestDelivery('ALL');
+                      setTestVerification('ALL');
+                      setTestMinRating(0);
+                    } else {
+                      setSubjectFilter('All');
+                      setExamFilter(defaultExam);
+                      setContentTypeFilter('All');
+                    }
+                  }}
+                  className="text-[10px] font-mono font-bold text-[#FF5A1F] hover:underline uppercase cursor-pointer"
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-350" />
-                  <span>Filters</span>
+                  Reset Parameters
                 </button>
               </div>
 
-              {/* Specification chips */}
-              {(subjectFilter !== 'All' || examFilter !== 'All' || contentTypeFilter !== 'All') && (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 font-mono">
-                  <span>ACTIVE FILTERS:</span>
-                  {subjectFilter !== 'All' && (
-                    <span className="text-[10px] bg-zinc-900 border border-[#222] px-2.5 py-0.5 rounded text-white flex items-center gap-1">
-                      Subject: {subjectFilter}
-                      <button onClick={() => setSubjectFilter('All')} className="hover:text-rose-400 ml-1">×</button>
-                    </span>
-                  )}
-                  {examFilter !== 'All' && (
-                    <span className="text-[10px] bg-zinc-900 border border-[#222] px-2.5 py-0.5 rounded text-white">
-                      Exam Category: {examFilter}
-                    </span>
-                  )}
-                  {contentTypeFilter !== 'All' && (
-                    <span className="text-[10px] bg-zinc-900 border border-[#222] px-2.5 py-0.5 rounded text-white flex items-center gap-1">
-                      Format: {contentTypeFilter}
-                      <button onClick={() => setContentTypeFilter('All')} className="hover:text-rose-400 ml-1">×</button>
-                    </span>
-                  )}
-                </div>
-              )}
+              {activeExploreTab === 'tests' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5 text-xs text-zinc-350">
 
-              {/* Autocomplete Suggestions from Dynamic Index */}
-              {searchSuggestions.length > 0 && searchQuery.trim() !== '' && (
-                <div className="bg-[#0B0B0B] border border-zinc-900 rounded-xl p-3.5 space-y-2">
-                  <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">Suggestions matched of live index:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {searchSuggestions.slice(0, 5).map((suggestion, sIdx) => (
-                      <button
-                        key={sIdx}
-                        onClick={() => {
-                          setSearchQuery(suggestion);
-                          // record search query in history if we wanted to
-                          const now = Date.now();
-                          setSearchHistory(prev => {
-                            const without = prev.filter(x => x.query.toLowerCase() !== suggestion.toLowerCase());
-                            const updated = [{ query: suggestion, ts: now }, ...without].slice(0, 10);
-                            localStorage.setItem('biovised_search_history_v2', JSON.stringify(updated));
-                            return updated;
-                          });
-                        }}
-                        className="text-[10px] font-mono bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-[#FF5A1F] px-3 py-1 rounded-full cursor-pointer transition-colors"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Realtime Search Multi-Step Logging Banner */}
-              {searchQuery.trim() !== '' && (
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0A0A0A]/40 border border-[#141414] rounded-xl px-4 py-2.5 text-[10px] font-mono">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isSearchingServer ? 'bg-amber-400' : 'bg-green-400'} opacity-75`}></span>
-                      <span className={`relative inline-flex rounded-full h-2 w-2 ${isSearchingServer ? 'bg-amber-500' : 'bg-green-500'}`}></span>
-                    </span>
-                    <span className="text-zinc-400 uppercase">
-                      {isSearchingServer 
-                        ? 'Search engine scanning index registers...'
-                        : 'Verified index query complete'
-                      }
-                    </span>
-                  </div>
-
-                  {searchedExternal && (
-                    <div className="text-amber-500 uppercase flex items-center gap-1">
-                      <span>• Step 3/4 Direct YouTube fallback triggered</span>
-                      <span className="bg-amber-950/50 text-amber-500 border border-amber-500/30 text-[9px] px-1.5 py-0.2 rounded font-bold uppercase shrink-0">
-                        Pending Verification
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Empty state -> Genuine Search History (Past 15 days) */}
-              {searchQuery.trim() === '' ? (
-                <div className="space-y-4 pt-2">
-                  <div className="flex justify-between items-center pb-2 border-b border-[#1A1A1A]">
-                    <h3 className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5" /> Recent Search History
-                    </h3>
-                    {searchHistory.length > 0 && (
-                      <button
-                        onClick={() => {
-                          localStorage.removeItem('biovised_search_history_v2');
-                          setSearchHistory([]);
-                        }}
-                        className="text-[10px] text-zinc-505 hover:text-white uppercase font-mono font-bold hover:underline cursor-pointer"
-                      >
-                        Clear All History
-                      </button>
-                    )}
-                  </div>
-
-                  {searchHistory.length === 0 ? (
-                    <div className="py-16 text-center text-zinc-500 font-mono text-xs space-y-1 bg-[#0A0A0A] rounded-2xl border border-[#141414]">
-                      <p className="font-bold text-zinc-400">YOUR HISTORY IS EMPTY</p>
-                      <p className="text-[11px] text-zinc-600 max-w-sm mx-auto leading-relaxed mt-1">Previous searches will be securely cached here for 15 days focus tracking.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {searchHistory.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between py-2.5 px-3.5 hover:bg-zinc-905 rounded-xl group transition-all"
+                  {/* Delivery Mode */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">Delivery Mode</span>
+                    <div className="flex flex-wrap gap-1">
+                      {['ALL', 'ONLINE', 'OFFLINE'].map(mode => (
+                        <button
+                          key={mode}
+                          onClick={() => setTestDelivery(mode)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-medium border cursor-pointer select-none leading-none transition-colors ${
+                            testDelivery === mode
+                              ? 'bg-white text-black border-white'
+                              : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white'
+                          }`}
                         >
-                          <button
-                            onClick={() => {
-                              setSearchQuery(item.query);
-                              recordSearchQuery(item.query);
-                            }}
-                            className="flex-1 flex items-center gap-3 text-xs text-zinc-350 hover:text-white font-mono text-left cursor-pointer"
-                          >
-                            <Search className="w-3.5 h-3.5 text-zinc-650 shrink-0" />
-                            <span>{item.query}</span>
-                          </button>
-                          <button
-                            onClick={() => deleteSearchQuery(item.query)}
-                            className="p-1 text-zinc-550 hover:text-rose-400 rounded transition-colors cursor-pointer"
-                            title="Remove from history"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                          {mode}
+                        </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Verification status */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">Verification</span>
+                    <div className="flex flex-wrap gap-1">
+                      {['ALL', 'VERIFIED', 'UNVERIFIED'].map(v => (
+                        <button
+                          key={v}
+                          onClick={() => setTestVerification(v)}
+                          className={`px-2.5 py-1 rounded text-[10px] font-medium border cursor-pointer select-none leading-none transition-colors ${
+                            testVerification === v
+                              ? 'bg-white text-black border-white'
+                              : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {v === 'ALL' ? 'All' : v === 'VERIFIED' ? 'Verified' : 'Manual'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Rating Selector */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">Min Rating</span>
+                    <div className="pt-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.5"
+                        value={testMinRating}
+                        onChange={(e) => setTestMinRating(parseFloat(e.target.value))}
+                        className="w-full accent-emerald-500 cursor-pointer h-1 bg-zinc-800 rounded-lg outline-none"
+                      />
+                      <div className="flex justify-between text-[9px] font-mono text-zinc-500 mt-1">
+                        <span>Any</span>
+                        <span className="text-emerald-400 font-bold">{testMinRating}★+</span>
+                        <span>5★</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sort parameter */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">Sort By</span>
+                    <select
+                      value={testSortBy}
+                      onChange={(e) => setTestSortBy(e.target.value as any)}
+                      className="bg-[#111113] border border-zinc-850 rounded px-2.5 py-1.5 text-[11px] font-sans text-zinc-300 outline-none w-full"
+                    >
+                      <option value="trustScore">Trust Score (High)</option>
+                      <option value="rating">Rating (High to Low)</option>
+                      <option value="priceAsc">Price (Low to High)</option>
+                      <option value="priceDesc">Price (High to Low)</option>
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs text-zinc-350">
+                  {/* Subject selector */}
+                  {activeExploreTab !== 'batches' && activeExploreTab !== 'institutes' && (
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">Preferred Subject</span>
+                      <div className="flex flex-wrap gap-1">
+                        {['All', 'Physics', 'Chemistry', 'Mathematics', 'Biology'].map(sub => (
+                          <button
+                            key={sub}
+                            onClick={() => setSubjectFilter(sub)}
+                            className={`px-2.5 py-1 rounded text-[10px] font-medium border cursor-pointer select-none leading-none transition-all ${
+                              subjectFilter === sub
+                                ? 'bg-white text-black border-white'
+                                : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {sub}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
+
+
+
+                  {/* Format selector for lectures tab */}
+                  {activeExploreTab === 'lecture' && (
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">Lesson Format</span>
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          { id: 'All', label: 'All Lectures' },
+                          { id: 'lecture', label: 'Standard Chapters' },
+                          { id: 'oneshot', label: 'One-shots Only' }
+                        ].map(ct => (
+                          <button
+                            key={ct.id}
+                            onClick={() => setContentTypeFilter(ct.id as any)}
+                            className={`px-2.5 py-1 rounded text-[10px] font-medium border cursor-pointer select-none leading-none transition-all ${
+                              contentTypeFilter === ct.id
+                                ? 'bg-white text-black border-white'
+                                : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {ct.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <main className={`flex-1 ${activeLecture ? 'pb-0' : 'pb-32'}`}>
+          
+          {/* Main conditional views manager */}
+          {currentView === 'search' ? (
+            <div className="max-w-4xl mx-auto px-4 py-4 space-y-6 text-left pb-24 min-h-[80vh]">
+              {/* Voice Listening Portal / Back Controls Header */}
+              <div className="flex justify-between items-center pb-3 border-b border-[#1A1A1A]">
+                <h3 className="text-sm font-sans font-bold text-white tracking-tight flex items-center gap-2">
+                  Search Results
+                </h3>
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentView('explore');
+                  }}
+                  className="text-xs font-mono font-bold text-zinc-500 hover:text-white uppercase tracking-wider px-3.5 py-1.5 rounded-full border border-zinc-900 bg-[#0A0A0B] hover:bg-zinc-900 transition-all cursor-pointer"
+                >
+                  ← Close Search
+                </button>
+              </div>
+
+              {/* Speech Error Banner - Handling not-allowed blocked permission states gracefully */}
+              {speechError && (
+                <div className="bg-red-950/45 border border-red-900/60 text-red-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono animate-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-1">
+                    <p className="font-bold uppercase tracking-wider text-red-400">Microphone Access Restricted</p>
+                    <p className="text-zinc-350 leading-relaxed max-w-2xl">
+                      {speechError === 'not-allowed' 
+                        ? 'Microphone permission was blocked or denied. Since this app is running in an iframe preview, please click the site settings, or allow microphone access in your browser.' 
+                        : `Speech recognition encountered an issue: "${speechError}".`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSpeechError(null)}
+                    className="self-start sm:self-center bg-red-900/40 hover:bg-red-900/60 hover:text-white text-zinc-200 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* Listening Overlay Portal */}
+              {isListening && (
+                <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center gap-6 select-none animate-in fade-in duration-200">
+                  <div className="relative flex items-center justify-center">
+                    <div className="absolute w-24 h-24 bg-red-500/20 rounded-full animate-ping" />
+                    <div className="absolute w-20 h-20 bg-red-500/10 rounded-full animate-pulse" />
+                    <div className="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl relative z-10 transition-transform active:scale-95">
+                      <Mic className="w-7 h-7 animate-pulse" />
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col items-center gap-2">
+                    <h3 className="text-lg font-bold tracking-wider uppercase text-white font-sans animate-pulse">
+                      Listening...
+                    </h3>
+                    <p className="text-xs text-zinc-450 font-mono">
+                      Say what you want to seek on Biovised
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setIsListening(false)}
+                    className="mt-8 px-6 py-2 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Main view routing logic: if searchQuery is empty feel, show absolutely nothing as in Pic 2 */}
+              {searchQuery.trim() === '' ? (
+                <div className="flex flex-col items-center justify-center py-20 text-zinc-700 font-mono text-center select-none">
+                  {/* Absolute clean void - zero logs, history or clutter as requested */}
                 </div>
               ) : (() => {
                 const showLectures = activeExploreTab === 'home' || activeExploreTab === 'lecture';
@@ -1058,63 +1391,33 @@ function AppContent() {
                         {filteredLectures.length === 0 ? (
                           <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No curriculum lessons matches your search.</p>
                         ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredLectures.map(lec => (
-                              <div
-                                key={lec.id}
-                                className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl overflow-hidden hover:border-neutral-700 transition-all flex text-left p-3.5 gap-4"
-                              >
-                                <div className="relative aspect-video w-28 sm:w-32 shrink-0 overflow-hidden rounded-lg bg-black border border-neutral-950">
-                                  <img src={getLectureThumbnail(lec)} alt={lec.title} className="w-full h-full object-cover" />
-                                  <button
-                                    onClick={() => {
-                                      recordSearchQuery(searchQuery);
-                                      setActiveLecture(lec);
-                                      setCurrentView('explore');
-                                    }}
-                                    className="absolute inset-0 m-auto w-9 h-9 rounded-full bg-white text-black flex items-center justify-center cursor-pointer shadow hover:scale-105 transition-transform"
-                                  >
-                                    <Play className="w-4 h-4 fill-black pl-0.5" />
-                                  </button>
-                                </div>
-                                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <h5 className="text-xs font-bold text-white uppercase truncate tracking-tight flex-1">{lec.title}</h5>
-                                      {lec.verificationStatus === 'pending' && (
-                                        <span className="bg-orange-950 text-orange-400 border border-orange-500/30 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase leading-none scale-90 shrink-0">
-                                          Unverified Source
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[10px] text-zinc-400 font-mono">By {lec.teacherName}</p>
-                                    {(lec as any).recommendationReason && (
-                                      <div className="text-[9px] text-[#A855F7] font-mono bg-[#A855F7]/5 border border-[#A855F7]/15 px-2 py-0.5 rounded-lg inline-block max-w-full">
-                                        ✨ {(lec as any).recommendationReason}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex justify-between items-center text-[9px] font-mono mt-1">
-                                    <span className="text-zinc-500">{lec.viewsCount?.toLocaleString()} Views</span>
-                                    {user && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const hidden = user.hiddenContent || [];
-                                          updatePreferences({
-                                            hiddenContent: [...hidden, lec.id]
-                                          }).catch(err => console.warn('Could not hide recommendation:', err));
-                                        }}
-                                        title="Hide content"
-                                        className="text-zinc-500 hover:text-red-400 p-1 rounded hover:bg-neutral-900 transition-colors cursor-pointer"
-                                      >
-                                        <EyeOff className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                            {filteredLectures.map(lec => {
+                              const formattedSub = "182K";
+                              const lectureDto = {
+                                ...lec,
+                                channel: {
+                                  id: lec.teacherId || 'unknown',
+                                  name: lec.teacherName || 'Verified Educator',
+                                  avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=120',
+                                  bannerUrl: null,
+                                  subscriberCountRaw: 182000,
+                                  subscriberCountFormatted: formattedSub
+                                }
+                              };
+
+                              return (
+                                <LectureCard
+                                  key={lec.id}
+                                  lecture={lectureDto as any}
+                                  onClick={() => {
+                                    recordSearchQuery(searchQuery);
+                                    setActiveLecture(lec);
+                                    setCurrentView('explore');
+                                  }}
+                                />
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -1203,20 +1506,11 @@ function AppContent() {
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {filteredBatches.map(b => (
-                              <div key={b.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex flex-col justify-between text-left gap-3">
-                                <div className="space-y-1">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-[9px] font-mono font-bold bg-zinc-800 text-zinc-350 px-2 py-0.5 rounded uppercase">{b.examType}</span>
-                                    <span className="text-[10px] font-mono text-rose-400 font-bold uppercase tracking-wider flex items-center gap-1">● Live</span>
-                                  </div>
-                                  <h5 className="text-xs font-bold text-white uppercase tracking-tight truncate">{b.name}</h5>
-                                  <p className="text-[10px] text-zinc-400 line-clamp-1">{b.description}</p>
-                                </div>
-                                <div className="pt-2 border-t border-neutral-900 flex justify-between items-center text-[10px] text-zinc-500 font-mono">
-                                  <span>Price: ₹{b.price?.toLocaleString()}</span>
-                                  <span className="text-white px-2 py-0.5 bg-zinc-90 w-fit rounded">{b.discountCode}</span>
-                                </div>
-                              </div>
+                              <BatchCard
+                                key={b.id}
+                                batch={b}
+                                onClick={() => setDetailModal({ id: b.id, type: 'batch' as any })}
+                              />
                             ))}
                           </div>
                         )}
@@ -1236,13 +1530,13 @@ function AppContent() {
                                 <div className="space-y-1">
                                   <div className="flex justify-between items-center">
                                     <span className="text-[9px] font-mono font-bold bg-zinc-800 text-zinc-350 px-2 py-0.5 rounded uppercase">{ts.examType}</span>
-                                    <span className="text-[10px] font-mono text-white/50">{ts.subject}</span>
+                                    <span className="text-[10px] font-mono text-white/50">{ts.subjects ? ts.subjects[0] : 'Syllabus Mapped'}</span>
                                   </div>
                                   <h5 className="text-xs font-bold text-white uppercase truncate tracking-tight">{ts.name}</h5>
                                   <p className="text-[10px] text-zinc-405 line-clamp-1">{ts.description}</p>
                                 </div>
                                 <div className="pt-2 border-t border-neutral-900 flex justify-between items-center text-[10px] text-zinc-500 font-mono">
-                                  <span>Questions: {ts.questionsCount}</span>
+                                  <DynamicRating targetId={ts.id} className="text-zinc-500 font-mono text-[9px] flex items-center gap-1" textClassName="hidden" />
                                   <button
                                     onClick={() => {
                                       setCurrentView('explore');
@@ -1307,12 +1601,29 @@ function AppContent() {
             />
           ) : currentView === 'moderator' && user?.email === 'adarshaman898@gmail.com' ? (
             <ModeratorDashboard />
+          ) : currentView === 'notifications' ? (
+            <div className="max-w-4xl mx-auto px-4 py-4 space-y-6 text-left pb-24 min-h-[80vh]">
+              <NotificationsDashboard
+                notifications={notifications}
+                onDismiss={handleNotificationDismiss}
+                onNotificationClick={handleNotificationClick}
+                onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+                onViewDashboard={(view) => {
+                  if (view === 'explore') {
+                    handleBackNavigation();
+                  } else {
+                    setCurrentView(view as any);
+                  }
+                }}
+                onOpenAuth={() => setAuthModalOpen(true)}
+              />
+            </div>
           ) : (
             // Explore View (Main Discovery Screen)
             <>
               {activeLecture ? (
                 /* Dedicated Video Player View (Plays in its own clean page to prevent design collapse) */
-                <div className="min-h-[80vh] flex flex-col pb-24 text-left">
+                <div className="min-h-[80vh] flex flex-col pb-4 text-left">
                   <div className="w-full">
                     <VideoPlayer
                       lecture={activeLecture}
@@ -1326,159 +1637,261 @@ function AppContent() {
                 <>
 
               {/* Main Tab Controller Content */}
-              {searchQuery !== '' ? (
-                <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-24 text-left">
+              {searchQuery !== '' && activeExploreTab === 'home' ? (
+                <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-24 text-left font-sans">
                   {/* Search Results Summary Header */}
-                  <div className="bg-[#111111] rounded-2xl p-6 border border-[#1A1A1A] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="bg-[#111113] rounded-2xl p-6 border border-neutral-900 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="space-y-1">
-                      <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <span>🔍 Unified Search Results</span>
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <span>🔍 VERIFIED VIDEO SEARCH</span>
                       </h3>
-                      <p className="text-[11px] text-zinc-400 font-mono font-medium">
-                        Matching keyword <span className="text-white font-semibold">"{searchQuery}"              </span> across resources
+                      <p className="text-[11px] text-zinc-400 font-mono">
+                        Scanning verified Firestore <span className="text-white font-semibold">videos</span> catalog for <span className="text-orange-400 font-bold">"{searchQuery}"</span>
                       </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
-                      {/* Specifications filter indicators */}
-                      {(subjectFilter !== 'All' || examFilter !== 'All' || contentTypeFilter !== 'All') && (
-                        <span className="text-[9px] font-mono uppercase bg-[#161616] px-2.5 py-1 text-zinc-400 border border-[#222] rounded-lg">
-                          ✓ ACTIVE SPECIFICATIONS: {subjectFilter !== 'All' && `${subjectFilter}`} {examFilter !== 'All' && `${examFilter}`} {contentTypeFilter !== 'All' && `${contentTypeFilter}`}
-                        </span>
-                      )}
-                      
                       <button
-                        onClick={() => setSpecsModalOpen(true)}
-                        className="px-4 py-1.5 bg-white text-black hover:bg-zinc-200 text-xs font-bold uppercase rounded-lg transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                        onClick={() => {
+                          setVidSearchSubject('All');
+                          setVidSearchChannel('All');
+                          setVidSearchDuration('All');
+                        }}
+                        className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-neutral-800 hover:border-neutral-700 text-xs font-bold uppercase rounded-lg transition-all cursor-pointer shrink-0"
                       >
-                        <Filter className="w-3.5 h-3.5 text-black" strokeWidth={2.5} /> Specify Parameters
+                        Reset Filters
                       </button>
 
                       <button
                         onClick={() => setSearchQuery('')}
-                        className="px-4 py-1.5 bg-zinc-900 text-zinc-300 hover:text-white border border-[#222] hover:border-zinc-700 text-xs font-bold uppercase rounded-lg transition-all cursor-pointer shrink-0"
+                        className="px-4 py-1.5 bg-zinc-850 hover:bg-zinc-750 text-zinc-105 hover:text-white text-xs font-bold uppercase rounded-lg transition-all cursor-pointer shrink-0"
                       >
                         Clear Search
                       </button>
                     </div>
                   </div>
 
-                  {/* 1. Lectures Matching */}
-                  <section className="space-y-4">
-                    <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider border-b border-[#1A1A1A] pb-2 flex items-center gap-2">
-                       Matching Video Chapters ({filteredLectures.length})
-                    </h4>
-                    {filteredLectures.length === 0 ? (
-                      <p className="text-xs text-zinc-500 py-6 text-center font-mono bg-[#0B0B0B] rounded-xl border border-[#1A1A1A]">
-                        No lecture chapters matched parameters.
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {filteredLectures.map((lec) => (
-                          <div
-                            key={lec.id}
-                            onClick={() => {
-                              setActiveLecture(lec);
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="bg-[#111111] rounded-xl overflow-hidden hover:bg-[#141414] cursor-pointer border border-[#1A1A1A] hover:border-zinc-700 transition-all p-3 flex gap-3 items-center group text-left"
+                  {/* Filter selectors requested: Subject, Channel, Duration */}
+                  <div className="bg-[#0A0A0C] border border-neutral-900 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Subject Tag Selector</label>
+                      <select
+                        value={vidSearchSubject}
+                        onChange={(e) => setVidSearchSubject(e.target.value)}
+                        className="w-full bg-[#111113] border border-neutral-800 rounded-xl text-xs text-white p-2.5 outline-none focus:border-orange-500/50"
+                      >
+                        <option value="All">All Subjects</option>
+                        {Array.from(new Set(firestoreVideos.map(v => v.subject).filter(Boolean))).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Channel Brand Filter</label>
+                      <select
+                        value={vidSearchChannel}
+                        onChange={(e) => setVidSearchChannel(e.target.value)}
+                        className="w-full bg-[#111113] border border-neutral-800 rounded-xl text-xs text-white p-2.5 outline-none focus:border-orange-500/50"
+                      >
+                        <option value="All">All Channels</option>
+                        {Array.from(new Set(firestoreVideos.map(v => v.channelName).filter(Boolean))).map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5 text-left">
+                      <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Duration Class</label>
+                      <div className="grid grid-cols-4 gap-1 bg-[#111113] p-1 border border-neutral-800 rounded-xl">
+                        {(['All', 'Short', 'Medium', 'Long'] as const).map(dur => (
+                          <button
+                            key={dur}
+                            type="button"
+                            onClick={() => setVidSearchDuration(dur)}
+                            className={`py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer text-center ${
+                              vidSearchDuration === dur
+                                ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
                           >
-                            <div className="relative w-24 aspect-video shrink-0 bg-black rounded overflow-hidden">
-                              <img src={getLectureThumbnail(lec)} alt={lec.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1">
-                                <h5 className="text-xs font-semibold uppercase text-white truncate">{lec.title}</h5>
-                                {lec.verificationStatus === 'pending' && (
-                                  <span className="bg-orange-950 text-orange-400 border border-orange-500/30 text-[7px] font-mono px-1 rounded uppercase tracking-wider scale-90 shrink-0">
-                                    Unverified
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-zinc-400 mt-1 font-mono">Expert: {lec.teacherName}</p>
-                              <span className="text-[8px] font-mono uppercase bg-neutral-900 border border-neutral-800 text-zinc-500 px-1 py-0.2 rounded mt-1.5 inline-block">
-                                {lec.exams?.join(', ') || 'General'}
-                              </span>
-                            </div>
-                          </div>
+                            {dur === 'All' ? 'All' : dur === 'Short' ? '<30m' : dur === 'Medium' ? '1-3h' : '>4h'}
+                          </button>
                         ))}
                       </div>
-                    )}
-                  </section>
+                    </div>
+                  </div>
 
-                  {/* 2. Teachers Matching */}
+                  {/* Matching results list rendering */}
                   <section className="space-y-4">
-                    <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider border-b border-[#1A1A1A] pb-2 flex items-center gap-2">
-                      Matching Educators ({filteredTeachers.length})
-                    </h4>
-                    {filteredTeachers.length === 0 ? (
-                      <p className="text-xs text-zinc-500 py-6 text-center font-mono bg-[#0B0B0B] rounded-xl border border-[#1A1A1A]">
-                        No educators matched the specifications.
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {filteredTeachers.map((t) => (
-                          <div
-                            key={t.id}
-                            onClick={() => setDetailModal({ id: t.id, type: 'teacher' })}
-                            className="p-3 bg-[#111111] border border-[#1A1A1A] hover:border-zinc-700 rounded-xl flex items-center gap-3 cursor-pointer transition-all text-left"
-                          >
-                            <img src={t.avatar} alt={t.name} className="w-9 h-9 rounded-full object-cover border border-[#1A1A1A]" />
-                            <div className="min-w-0">
-                              <h5 className="text-[11.5px] font-bold text-white truncate">{t.name}</h5>
-                              <p className="text-[9.5px] text-zinc-400 font-mono mt-0.5 truncate">{t.subject} Specialist</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-
-                  {/* 3. Batches Matching */}
-                  <section className="space-y-4">
-                    <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider border-b border-[#1A1A1A] pb-2 flex items-center gap-2">
-                      Matching Batches & Cohorts
-                    </h4>
-                    {batches.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.subject.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                      <p className="text-xs text-zinc-500 py-6 text-center font-mono bg-[#0B0B0B] rounded-xl border border-[#1A1A1A]">
-                        No batch schedules matched keyword.
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {batches
-                          .filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.subject.toLowerCase().includes(searchQuery.toLowerCase()))
-                          .map((b) => (
-                            <div
-                              key={b.id}
-                              className="p-4 bg-[#111111] border border-[#1A1A1A] rounded-xl text-left"
-                            >
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-[9px] font-mono uppercase bg-neutral-900 border border-neutral-800 text-zinc-400 px-1.5 py-0.5 rounded leading-none">
-                                  {b.subject}
-                                </span>
-                              </div>
-                              <h5 className="text-xs font-semibold text-white">{b.name}</h5>
-                              <p className="text-[10.5px] text-zinc-450 mt-1 line-clamp-1">{b.description}</p>
-                            </div>
-                          ))
+                    {(() => {
+                      const queryClean = searchQuery.trim().toLowerCase();
+                      const parseDurToSec = (durStr?: string): number => {
+                        if (!durStr) return 0;
+                        if (durStr.startsWith('PT') || durStr.startsWith('PST')) {
+                          let hrs = 0; let mins = 0; let secs = 0;
+                          const hM = durStr.match(/(\d+)H/); if (hM) hrs = parseInt(hM[1], 10);
+                          const mM = durStr.match(/(\d+)M/); if (mM) mins = parseInt(mM[1], 10);
+                          const sM = durStr.match(/(\d+)S/); if (sM) secs = parseInt(sM[1], 10);
+                          return (hrs * 3600) + (mins * 60) + secs;
                         }
-                      </div>
-                    )}
+                        const pts = durStr.split(':').map(Number);
+                        if (pts.length === 3) return (pts[0] * 3600) + (pts[1] * 60) + pts[2];
+                        if (pts.length === 2) return (pts[0] * 60) + pts[1];
+                        return parseInt(durStr, 10) || 0;
+                      };
+
+                      const results = firestoreVideos.filter(v => {
+                        // Keyword Query Match inside Title, Subject, Channel Name, Topic
+                        if (queryClean) {
+                          const inTitle = v.title?.toLowerCase().includes(queryClean);
+                          const inSubject = v.subject?.toLowerCase().includes(queryClean);
+                          const inChannel = v.channelName?.toLowerCase().includes(queryClean);
+                          const inTopic = v.topic?.toLowerCase().includes(queryClean);
+                          if (!inTitle && !inSubject && !inChannel && !inTopic) {
+                            return false;
+                          }
+                        }
+
+                        // Subject Filter
+                        if (vidSearchSubject !== 'All' && v.subject !== vidSearchSubject) {
+                          return false;
+                        }
+
+                        // Channel Filter
+                        if (vidSearchChannel !== 'All' && v.channelName !== vidSearchChannel) {
+                          return false;
+                        }
+
+                        // Duration Filter (Short < 30m / Medium 1-3hrs / Long > 4h)
+                        if (vidSearchDuration !== 'All') {
+                          const sec = v.durationSeconds || parseDurToSec(v.duration) || 0;
+                          if (vidSearchDuration === 'Short') {
+                            if (sec >= 1800) return false;
+                          } else if (vidSearchDuration === 'Medium') {
+                            if (sec < 1800 || sec > 10800) return false;
+                          } else if (vidSearchDuration === 'Long') {
+                            if (sec <= 14400) return false;
+                          }
+                        }
+
+                        return true;
+                      });
+
+                      const getPlaylistTitle = (playlistId: string): string => {
+                        const pl = playlists.find(p => p.id === playlistId || p.playlistId === playlistId);
+                        return pl ? pl.title : "Academic Course Playlist";
+                      };
+
+                      if (isSyncingVideos) {
+                        return (
+                          <div className="py-12 text-center text-zinc-400 font-mono text-xs">
+                            Syncing Firestore videos in real-time...
+                          </div>
+                        );
+                      }
+
+                      if (results.length === 0) {
+                        return (
+                          <div className="text-xs text-zinc-500 py-10 text-center font-mono bg-[#0B0B0C] rounded-2xl border border-neutral-900">
+                            No videos matched search parameter bounds.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                          {results.map((v) => {
+                            const ytId = v.videoId || v.id;
+                            const playlistName = getPlaylistTitle(v.playlistId);
+                            return (
+                              <div
+                                key={v.id}
+                                onClick={() => {
+                                  // Map YouTubeVideo to Lecture spec and play
+                                  const mapped: Lecture = {
+                                    id: ytId,
+                                    title: v.title,
+                                    description: v.description || "",
+                                    videoUrl: `https://www.youtube.com/embed/${ytId}`,
+                                    thumbnailUrl: v.thumbnail || `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
+                                    subject: v.subject || "Mixed",
+                                    examType: v.examTags?.[0] || "JEE/NEET",
+                                    contentType: "lecture",
+                                    teacherId: "imported",
+                                    teacherName: v.channelName || "Teacher",
+                                    playlistId: v.playlistId,
+                                    duration: v.duration || "10:00",
+                                    viewsCount: v.viewCount || 0,
+                                    likesCount: v.likeCount || 0,
+                                    createdAt: v.importedAt || new Date().toISOString(),
+                                    youtubeVideoId: ytId
+                                  };
+                                  setActiveLecture(mapped);
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className="bg-[#111113] border border-neutral-900 rounded-2xl overflow-hidden hover:border-neutral-800 hover:bg-[#141416] transition-all flex flex-col justify-between cursor-pointer group p-3 text-left space-y-3"
+                              >
+                                {/* Thumbnail */}
+                                <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-neutral-950 shrink-0">
+                                  <YoutubeThumbnailImg videoId={ytId} alt={v.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                  <span className="absolute bottom-2.5 right-2.5 text-[9px] font-mono font-bold tracking-wider bg-black/85 px-2 py-0.5 rounded text-white uppercase">
+                                    {v.duration || "10:00"}
+                                  </span>
+                                </div>
+
+                                {/* Content Details */}
+                                <div className="space-y-2 flex-grow flex flex-col justify-between">
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[8px] font-mono font-bold uppercase bg-neutral-900 text-zinc-400 border border-neutral-800 px-2 py-0.5 rounded">
+                                        {v.subject}
+                                      </span>
+                                      {v.topic && (
+                                        <span className="text-[8px] font-mono font-bold uppercase bg-orange-950/25 text-orange-400 border border-orange-500/10 px-2 py-0.5 rounded">
+                                          {v.topic}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <h4 className="text-xs font-bold text-white tracking-tight leading-snug line-clamp-2 uppercase">
+                                      {v.title}
+                                    </h4>
+                                  </div>
+
+                                  <div className="space-y-1 pt-2 border-t border-neutral-900/50">
+                                    <p className="text-[10px] text-zinc-400 font-bold truncate">
+                                      Channel: <span className="text-white">{v.channelName}</span>
+                                    </p>
+                                    <p className="text-[10px] text-zinc-500 truncate font-mono">
+                                      Playlist: <span className="text-zinc-400">{playlistName}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </section>
                 </div>
               ) : (
                 <>
                   {activeExploreTab === 'home' && (
-                    <Hero
-                      onExploreLectures={() => {
-                        setActiveExploreTab('lecture');
-                        setContentTypeFilter('oneshot');
+                    <HomeDashboard
+                      lectures={lectures}
+                      teachers={teachers}
+                      institutes={institutes}
+                      onViewAll={(tab) => {
+                        setActiveExploreTab(tab);
+                        setSearchQuery('');
+                        setShowFilters(false);
+                        setIsSearchFocused(false);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      onExploreTeachers={() => {
-                        setActiveExploreTab('teachers');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
+                      onSelectLecture={setActiveLecture}
+                      onSelectTeacher={(id) => setDetailModal({ id, type: 'teacher' })}
+                      onSelectInstitute={(id) => setDetailModal({ id, type: 'institute' })}
                     />
                   )}
 
@@ -1492,58 +1905,42 @@ function AppContent() {
                       </h3>
                     </div>
 
-                    {filteredLectures.length === 0 ? (
+                    {isInitialLoading ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-fade-in">
+                        {Array.from({ length: 8 }).map((_, idx) => (
+                          <LectureCardSkeleton key={idx} />
+                        ))}
+                      </div>
+                    ) : filteredLectures.length === 0 ? (
                       <p className="text-xs text-zinc-500 py-10 text-center font-mono bg-[#111111] rounded-2xl">No video lessons registered matching search parameter bounds.</p>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                        {filteredLectures.map((lec) => (
-                          <div
-                            key={lec.id}
-                            onClick={() => {
-                              setActiveLecture(lec);
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="bg-[#111111] rounded-2xl overflow-hidden hover:bg-[#141414] cursor-pointer transition-all flex flex-col justify-between group"
-                          >
-                            <div className="relative aspect-video bg-black overflow-hidden">
-                              <img src={getLectureThumbnail(lec)} alt={lec.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Play className="w-10 h-10 text-white fill-current" />
-                              </div>
-                              <span className="absolute bottom-2.5 right-2.5 text-[8px] font-mono font-bold tracking-wider bg-black/85 px-2 py-0.5 rounded text-white uppercase">
-                                {lec.duration}
-                              </span>
-                            </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        {filteredLectures.map((lec) => {
+                          const formattedSub = "182K";
+                          const lectureDto = {
+                            ...lec,
+                            channel: {
+                              id: lec.teacherId || 'unknown',
+                              name: lec.teacherName || 'Verified Educator',
+                              avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=120',
+                              bannerUrl: null,
+                              subscriberCountRaw: 182000,
+                              subscriberCountFormatted: formattedSub
+                            }
+                          };
 
-                            <div className="p-5 space-y-3.5 text-left flex-grow flex flex-col justify-between">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2 overflow-hidden">
-                                  <span className="text-[8px] font-mono font-bold uppercase bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
-                                    {lec.subject}
-                                  </span>
-                                  <span className="text-[10px] text-zinc-400 font-bold truncate">
-                                    {lec.teacherName}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-start justify-between gap-1.5 flex-wrap">
-                                  <h4 className="text-xs font-bold text-white tracking-tight leading-snug line-clamp-2 uppercase flex-1">
-                                    {lec.title}
-                                  </h4>
-                                  {lec.verificationStatus === 'pending' && (
-                                    <span className="bg-orange-950 text-orange-400 border border-orange-500/30 text-[7px] font-mono px-1 rounded uppercase tracking-wider scale-90 shrink-0">
-                                      Unverified
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="text-[9px] text-zinc-500 font-mono pt-1 uppercase tracking-wider">
-                                Stream views: {lec.viewsCount?.toLocaleString() || '0'}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          return (
+                            <LectureCard
+                              key={lec.id}
+                              lecture={lectureDto as any}
+                              onClick={() => {
+                                recordSearchQuery(searchQuery);
+                                setActiveLecture(lec);
+                                setCurrentView('explore');
+                              }}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                   </section>
@@ -1558,7 +1955,13 @@ function AppContent() {
                     </h3>
                   </div>
 
-                  {filteredTeachers.length === 0 ? (
+                  {isInitialLoading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 animate-fade-in">
+                      {Array.from({ length: 8 }).map((_, idx) => (
+                        <TeacherCardSkeleton key={idx} />
+                      ))}
+                    </div>
+                  ) : filteredTeachers.length === 0 ? (
                     <p className="text-xs text-zinc-500 py-10 text-center font-mono">No educators listed matching criteria.</p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
@@ -1601,13 +2004,12 @@ function AppContent() {
                           </div>
 
                           <div className="space-y-3.5 pt-3.5 border-t border-[#262626]">
-                            <div className="flex justify-between items-center text-[10px] font-mono">
-                              <div className="flex items-center gap-1 text-amber-500">
-                                <Star className="w-3.5 h-3.5 fill-current" />
-                                <span className="font-bold">{t.rating || 4.5}</span>
-                              </div>
-                              <span className="text-zinc-500 uppercase">({t.reviewCount || 0} reviews)</span>
-                            </div>
+                            <DynamicRating 
+                              targetId={t.id}
+                              className="flex justify-between items-center text-[10px] font-mono w-full"
+                              starClassName="text-amber-500 font-sans flex items-center gap-1"
+                              textClassName="text-zinc-500 uppercase ml-auto"
+                            />
 
                             {/* Actions line */}
                             <div className="flex gap-2 text-xs">
@@ -1637,89 +2039,7 @@ function AppContent() {
               )}
 
               {activeExploreTab === 'playlists' && (
-                <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 pb-24 text-left">
-                  {/* Playlist Database Header in accordance with Biovised Screenshot format */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-mono font-bold tracking-widest text-[#2DD4BF] uppercase block">
-                      DATABASE
-                    </span>
-                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-display">
-                      YouTube Playlists
-                    </h2>
-                    <span className="text-xs text-zinc-500 font-mono block">
-                      {filteredPlaylists.length} playlists
-                    </span>
-                  </div>
-
-
-
-                  {/* Playlists listing */}
-                  {filteredPlaylists.length === 0 ? (
-                    <div className="text-center py-12 rounded-2xl bg-[#0F0F10] border border-neutral-900">
-                      <p className="text-xs text-zinc-500 font-mono">No playlists match the selected subject filter.</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {filteredPlaylists.map((p) => (
-                        <div
-                          key={p.id}
-                          onClick={() => handleSelectPlaylist(p)}
-                          className="bg-[#0F0F10] hover:bg-[#131314] border border-[#202022] rounded-2xl p-4 flex gap-4 items-center justify-between text-left cursor-pointer transition-all duration-300 hover:border-zinc-700 w-full"
-                        >
-                          {/* Left: Video / Playlist play icon inside layered card */}
-                          <div className="w-32 xs:w-40 sm:w-52 shrink-0 aspect-video bg-[#070708] border border-[#202022] rounded-xl relative group overflow-hidden">
-                            {getPlaylistThumbnail(p) ? (
-                              <img
-                                src={getPlaylistThumbnail(p)}
-                                alt={p.title}
-                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="absolute inset-2 border border-zinc-900 rounded-lg flex items-center justify-center bg-zinc-900">
-                                <PlaySquare className="w-5 h-5 text-zinc-650" />
-                              </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/45 group-hover:bg-black/25 transition-colors flex items-center justify-center">
-                              <div className="bg-[#0C0C0D]/80 p-2 rounded-full border border-neutral-800">
-                                <svg
-                                  className="w-3.5 h-3.5 text-white group-hover:text-[#2DD4BF] transition-colors"
-                                  fill="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path d="M8 5v14l11-7z" />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right: Content details */}
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            {/* Top row with tags, count, and rating */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[10px] text-zinc-500 font-mono">
-                                Lecture count {p.lecturesCount || "TBD"}
-                              </span>
-                              <div className="text-[10px] bg-[#0A0A0B] border border-neutral-900 text-zinc-500 px-2 py-0.5 rounded-full font-mono flex items-center gap-1 ml-auto">
-                                <span className="text-zinc-650 font-sans">★</span> No ratings
-                              </div>
-                            </div>
-
-                            {/* Title */}
-                            <h4 className="text-sm sm:text-base font-bold text-white tracking-tight line-clamp-1 uppercase">
-                              {p.title}
-                            </h4>
-
-                            {/* Subtitle / Instructors */}
-                            <p className="text-[11px] sm:text-xs text-[#71717A] font-mono tracking-tight font-medium">
-                              {p.teacherName} • {p.instituteName}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <VideoLibrary onBackToHome={() => setActiveExploreTab('home')} />
               )}
 
               {activeExploreTab === 'batches' && (
@@ -1730,26 +2050,22 @@ function AppContent() {
                     </h3>
                   </div>
 
-                  {filteredBatches.length === 0 ? (
+                  {isInitialLoading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 animate-fade-in">
+                      {Array.from({ length: 4 }).map((_, idx) => (
+                        <BatchCardSkeleton key={idx} />
+                      ))}
+                    </div>
+                  ) : filteredBatches.length === 0 ? (
                     <p className="text-xs text-zinc-500 py-10 text-center font-mono bg-[#111111] rounded-2xl">No live student cohorts or batches match the selected criteria.</p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 p-0.5">
                       {filteredBatches.map((b) => (
-                        <div key={b.id} className="bg-[#111111] hover:bg-[#141414] rounded-2xl p-6 transition-all text-left flex flex-col justify-between gap-4">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-start">
-                              <span className="text-[9px] font-mono font-bold bg-zinc-800 text-zinc-350 px-2 py-0.5 rounded uppercase">{b.examType}</span>
-                              <span className="text-[10px] font-mono text-rose-400 font-bold uppercase tracking-wider flex items-center gap-1">● Live Batch</span>
-                            </div>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-tight line-clamp-1">{b.name}</h4>
-                            <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{b.description}</p>
-                          </div>
-
-                          <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono pt-3 border-t border-[#1C1C1C]">
-                            <span>Price: {typeof b.price === 'number' ? (b.price === 0 ? 'Free' : `₹${b.price.toLocaleString()}`) : 'Free'}</span>
-                            <span className="text-white font-extrabold bg-zinc-900 border border-[#222] px-2.5 py-0.5 rounded tracking-wide">{b.discountCode || 'VERIFIED'}</span>
-                          </div>
-                        </div>
+                        <BatchCard
+                          key={b.id}
+                          batch={b}
+                          onClick={() => setDetailModal({ id: b.id, type: 'batch' as any })}
+                        />
                       ))}
                     </div>
                   )}
@@ -1757,38 +2073,48 @@ function AppContent() {
               )}
 
               {activeExploreTab === 'tests' && (
-                <div className="max-w-7xl mx-auto px-4 py-16 pb-24 text-center">
-                  <div className="max-w-md mx-auto space-y-6 py-12 bg-[#111111] rounded-3xl border border-[#1C1C1C] px-6">
-                    <div className="w-16 h-16 bg-[#161616] rounded-full flex items-center justify-center mx-auto text-zinc-400">
-                      <ClipboardCheck className="w-8 h-8 text-zinc-400" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-                        Syllabus-Mapped Test Center
-                      </h3>
-                      <p className="text-xs text-zinc-405 font-mono leading-relaxed max-w-xs mx-auto">
-                        Sectional mock checkpoints, verified test series, and past-year study exams will be activated here soon.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <TestSeriesDirectory 
+                  searchQuery={searchQuery}
+                  selectedExamTag={testExamTag}
+                  setSelectedExamTag={setTestExamTag}
+                  selectedDelivery={testDelivery}
+                  setSelectedDelivery={setTestDelivery}
+                  selectedVerification={testVerification}
+                  setSelectedVerification={setTestVerification}
+                  minRating={testMinRating}
+                  setMinRating={setTestMinRating}
+                  sortBy={testSortBy}
+                  setSortBy={setTestSortBy}
+                />
               )}
 
               {activeExploreTab === 'institutes' && (
-                <div className="max-w-7xl mx-auto px-4 py-16 pb-24 text-center">
-                  <div className="max-w-md mx-auto space-y-6 py-12 bg-[#111111] rounded-3xl border border-[#1C1C1C] px-6">
-                    <div className="w-16 h-16 bg-[#161616] rounded-full flex items-center justify-center mx-auto text-zinc-400">
-                      <Building2 className="w-8 h-8 text-zinc-400" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-                        Affiliate Institutes
-                      </h3>
-                      <p className="text-xs text-zinc-405 font-mono leading-relaxed max-w-xs mx-auto">
-                        Premium preparation academies, verified digital learning portals, and structured stream hubs will be added here soon.
-                      </p>
-                    </div>
+                <div id="institutes-directory-root" className="max-w-7xl mx-auto px-4 py-8 space-y-6 pb-24 text-left font-sans">
+                  <div className="flex justify-between items-center pb-3 border-b border-[#1A1A1A]">
+                    <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-zinc-400" /> NEET & JEE VERIFIED ACADEMIC CHANNELS ({filteredInstitutes.length})
+                    </h3>
                   </div>
+
+                  {isInitialLoading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <InstituteCardSkeleton key={idx} />
+                      ))}
+                    </div>
+                  ) : filteredInstitutes.length === 0 ? (
+                    <p className="text-xs text-zinc-500 py-10 text-center font-mono bg-[#111111] rounded-2xl">No affiliated academies match the selected criteria.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredInstitutes.map((inst) => (
+                        <InstituteCard
+                          key={inst.id}
+                          institute={inst}
+                          onViewHub={() => setDetailModal({ id: inst.id, type: 'institute' })}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
                 </>
@@ -1803,11 +2129,11 @@ function AppContent() {
                   {[
                     { id: 'home', label: 'Home', icon: Home },
                     { id: 'teachers', label: 'Teachers', icon: Users },
-                    { id: 'playlists', label: 'Playlists', icon: PlaySquare },
+                    { id: 'playlists', label: 'Verse', icon: PlaySquare },
                     { id: 'tests', label: 'Tests', icon: ClipboardCheck },
                     { id: 'batches', label: 'Batches', icon: Layers },
                     { id: 'lecture', label: 'Lecture', icon: Video },
-                    { id: 'institutes', label: 'Institutes', icon: Building2 }
+                    { id: 'institutes', label: 'Channels', icon: Building2 }
                   ].map((t) => {
                     const Icon = t.icon;
                     const isActive = currentView === 'explore' && activeExploreTab === t.id;
@@ -1816,7 +2142,11 @@ function AppContent() {
                         key={t.id}
                         onClick={() => {
                           setCurrentView('explore');
-                          setActiveExploreTab(t.id as any);
+                          const targetTab = t.id as any;
+                          setActiveExploreTab(targetTab);
+                          setSearchQuery('');
+                          setShowFilters(false);
+                          setIsSearchFocused(false);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
                         className="flex-1 min-w-0 h-full flex flex-col items-center justify-center cursor-pointer relative py-0.5 focus:outline-none transition-all duration-200"
@@ -1893,6 +2223,17 @@ function AppContent() {
         searchQuery={searchQuery}
         verifiedOnly={verifiedOnly}
         setVerifiedOnly={setVerifiedOnly}
+        activeExploreTab={activeExploreTab}
+        testExamTag={testExamTag}
+        setTestExamTag={setTestExamTag}
+        testDelivery={testDelivery}
+        setTestDelivery={setTestDelivery}
+        testVerification={testVerification}
+        setTestVerification={setTestVerification}
+        testMinRating={testMinRating}
+        setTestMinRating={setTestMinRating}
+        testSortBy={testSortBy}
+        setTestSortBy={setTestSortBy}
       />
 
     </div>
@@ -1902,7 +2243,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <SearchProvider>
+        <AppContent />
+      </SearchProvider>
     </AuthProvider>
   );
 }

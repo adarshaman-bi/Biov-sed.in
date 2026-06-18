@@ -59,18 +59,9 @@ export default function NotificationsDashboard({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col justify-start items-center relative py-16 px-4 md:px-8 select-none">
+    <div className="w-full text-zinc-100 flex flex-col justify-start items-center relative py-6 px-4 md:px-8 select-none">
       
-      {/* Premium Standalone Floating Back Button */}
-      <button
-        onClick={() => onViewDashboard('explore')}
-        className="fixed top-6 left-6 z-50 p-2.5 px-4 bg-[#0A0A0B]/90 hover:bg-[#121214] border border-zinc-850 hover:border-zinc-750 text-zinc-400 hover:text-white rounded-full shadow-2xl backdrop-blur-md transition-all cursor-pointer flex items-center gap-2 font-mono text-[10px] uppercase font-bold tracking-wider"
-      >
-        <ArrowLeft className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-        <span>Portal</span>
-      </button>
-
-      <div className="w-full max-w-2xl mx-auto space-y-8 pt-8">
+      <div className="w-full max-w-2xl mx-auto space-y-8 pt-2">
         
         {/* Dynamic header summary statistics inside the dashboard itself */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-900">

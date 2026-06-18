@@ -112,24 +112,95 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "playlistId": { "type": "string" },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "thumbnailUrl": { "type": "string" },
-        "teacherId": { "type": "string" },
-        "instituteId": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "channelId": { "type": "string" },
+        "channelName": { "type": "string" },
+        "videoCount": { "type": "number" },
+        "lecturesCount": { "type": "number" },
+        "publishedAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastSynced": { "type": "string" },
+        "updatedAt": { "type": "string" },
         "subject": { "type": "string" },
         "examType": { "type": "string" },
-        "lecturesCount": { "type": "number" },
-        "createdAt": { "type": "string" },
-        "youtubePlaylistId": { "type": "string" },
-        "channelId": { "type": "string" },
         "examTypes": { "type": "array" },
-        "teacherRef": { "type": "string" },
-        "sourceUrl": { "type": "string" },
-        "verified": { "type": "boolean" },
-        "updatedAt": { "type": "string" }
+        "examTags": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "importStatus": { "type": "string", "enum": ["pending", "imported", "failed"] }
       },
-      "required": ["id", "title", "teacherId", "subject"]
+      "required": ["id", "title", "channelId", "subject", "importStatus"]
+    },
+    "YouTubeChannel": {
+      "title": "YouTube Channel",
+      "description": "An imported YouTube channel containing educational content playlists",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "channelId": { "type": "string" },
+        "channelName": { "type": "string" },
+        "channelHandle": { "type": "string" },
+        "channelThumbnail": { "type": "string" },
+        "subscriberCount": { "type": "number" },
+        "description": { "type": "string" },
+        "addedBy": { "type": "string" },
+        "addedAt": { "type": "string" },
+        "lastSynced": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "tags": { "type": "array" },
+        "totalVideos": { "type": "number" },
+        "totalPlaylists": { "type": "number" }
+      },
+      "required": ["id", "channelId", "channelName", "channelHandle", "isActive"]
+    },
+    "YouTubeVideo": {
+      "title": "YouTube Video",
+      "description": "An imported and verified educational lecture video",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "videoId": { "type": "string" },
+        "playlistId": { "type": "string" },
+        "channelId": { "type": "string" },
+        "channelName": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "duration": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "publishedAt": { "type": "string" },
+        "viewCount": { "type": "number" },
+        "likeCount": { "type": "number" },
+        "position": { "type": "number" },
+        "subject": { "type": "string" },
+        "topic": { "type": "string" },
+        "examTags": { "type": "array" },
+        "chapter": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "importedAt": { "type": "string" }
+      },
+      "required": ["id", "videoId", "playlistId", "channelId", "title", "subject", "isActive"]
+    },
+    "YouTubeSyncLog": {
+      "title": "YouTube Sync Log",
+      "description": "Audit record of YouTube synchronization task execution metrics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "targetId": { "type": "string" },
+        "status": { "type": "string" },
+        "videosImported": { "type": "number" },
+        "playlistsImported": { "type": "number" },
+        "apiUnitsUsed: ": { "type": "number" },
+        "error": { "type": "string" },
+        "triggeredBy": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "type", "targetId", "status", "triggeredBy", "timestamp"]
     },
     "OneShot": {
       "title": "One Shot lecture video",
@@ -184,14 +255,14 @@
     },
     "Review": {
       "title": "Review",
-      "description": "Student review of teacher or institute",
+      "description": "Student review of teacher, institute, or testSeries",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "userDisplayName": { "type": "string" },
         "targetId": { "type": "string" },
-        "targetType": { "type": "string", "enum": ["teacher", "institute"] },
+        "targetType": { "type": "string", "enum": ["teacher", "institute", "testSeries"] },
         "rating": { "type": "number" },
         "comment": { "type": "string" },
         "trustImpact": { "type": "number" },
@@ -430,6 +501,18 @@
     "/ingestionControl/{controlId}": {
       "schema": "IngestionControl",
       "description": "Controls the ingestion phases and tracked import progress"
+    },
+    "/channels/{channelId}": {
+      "schema": "YouTubeChannel",
+      "description": "YouTube channels curated by administration"
+    },
+    "/videos/{videoId}": {
+      "schema": "YouTubeVideo",
+      "description": "YouTube videos imported as course lectures"
+    },
+    "/syncLogs/{logId}": {
+      "schema": "YouTubeSyncLog",
+      "description": "Operation synchronization logs for audited background ingestion"
     }
   }
 }

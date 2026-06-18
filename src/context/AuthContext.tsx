@@ -34,7 +34,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Local helpers for guest preferences
 const getGuestProfile = (): UserProfile => {
-  const localExam = localStorage.getItem('biovised_pref_examType') || 'Both';
+  const localExam = localStorage.getItem('biovised_pref_examType') || 'NEET';
   const localYear = localStorage.getItem('biovised_pref_appearingYear') || '2026';
   
   let localSubjects: string[] = [];
@@ -118,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('biovised_is_guest'); // block guest persistence once real credentials take over
         // Load custom profile
         let profile = await fetchUserProfile(fUser.uid);
+        const isAdminEmail = fUser.email === 'adarshaman898@gmail.com';
         if (!profile) {
           // If no profile, bootstrap user role profile
           const now = new Date().toISOString();
@@ -125,12 +126,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             uid: fUser.uid,
             email: fUser.email || '',
             displayName: fUser.displayName || 'Pupil',
-            role: 'user',
-            examType: 'Both',
+            role: isAdminEmail ? 'admin' : 'user',
+            examType: 'NEET',
             createdAt: now,
             updatedAt: now,
           });
           profile = await fetchUserProfile(fUser.uid);
+        } else if (isAdminEmail && profile.role !== 'admin') {
+          profile.role = 'admin';
         }
         setUser(profile);
       } else {
@@ -217,8 +220,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setIsGuest(false);
     localStorage.removeItem('biovised_is_guest');
-    await signOut(auth);
+    localStorage.removeItem('biovised_pref_onboardingCompleted');
+    localStorage.removeItem('biovised_pref_examType');
+    localStorage.removeItem('biovised_pref_appearingYear');
+    localStorage.removeItem('biovised_pref_preferredSubjects');
+    localStorage.removeItem('biovised_pref_watchedContent');
+    localStorage.removeItem('biovised_pref_savedContent');
+    localStorage.removeItem('biovised_pref_hiddenContent');
+    localStorage.removeItem('biovised_pref_likedContent');
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn('Firebase signOut exception bypassed:', err);
+    }
     setUser(null);
+    setFirebaseUser(null);
     setLoading(false);
   };
 
@@ -269,7 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPreferences = async () => {
     const emptyPrefs: Partial<UserProfile> = {
-      examType: 'Both',
+      examType: 'NEET',
       appearingYear: '2026',
       preferredSubjects: [],
       watchedContent: [],

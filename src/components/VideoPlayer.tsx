@@ -25,10 +25,16 @@ import {
   FileCheck2,
   MessageSquare,
   Sparkles,
-  Info
+  Info,
+  RotateCcw,
+  RotateCw,
+  Tv,
+  MoreVertical
 } from 'lucide-react';
 import { Lecture, Review } from '../types';
 import { getLectureThumbnail } from '../services/thumbnailHelper';
+import YoutubeThumbnailImg from './YoutubeThumbnailImg';
+import { SafeImage } from './SafeImage';
 import {
   toggleWatchLater,
   toggleLikeVideo,
@@ -99,13 +105,94 @@ export default function VideoPlayer({
   const [activePopupSection, setActivePopupSection] = useState<'main' | 'speed' | 'quality'>('main');
   const [showReportToast, setShowReportToast] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [showFullScreenReviews, setShowFullScreenReviews] = useState(false);
+  const [reviewSort, setReviewSort] = useState<'newest' | 'highest' | 'lowest'>('newest');
+  const [autoQuality, setAutoQuality] = useState(true);
+
+  // Transient Play/Pause indicator states & Unified tap references
+  const [transientAction, setTransientAction] = useState<'play' | 'pause' | null>(null);
+  const transientTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastClickTimeRef = useRef<number>(0);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Social/Channel states
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isWatchLater, setIsWatchLater] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
   const [channelInfo, setChannelInfo] = useState<{ channelTitle: string; avatarUrl: string } | null>(null);
+
+  // Watched state tracking inside VideoPlayer
+  const [watchedVideos, setWatchedVideos] = useState<string[]>([]);
+
+  // Safe client-only watched videos cache load
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('watched_videos');
+      if (stored) setWatchedVideos(JSON.parse(stored));
+    } catch (e) {
+      console.warn("Error restoring watched videos:", e);
+    }
+  }, []);
+
+  const toggleVideoWatched = (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const currentList = [...watchedVideos];
+    const isWatched = currentList.includes(id);
+    let newList;
+    if (isWatched) {
+      newList = currentList.filter(item => item !== id);
+    } else {
+      newList = [...new Set([...currentList, id])];
+    }
+    setWatchedVideos(newList);
+    localStorage.setItem('watched_videos', JSON.stringify(newList));
+  };
+
+  const playNext = () => {
+    if (!playlistLectures || playlistLectures.length === 0 || !onSelectLecture) return;
+    const currentIndex = playlistLectures.findIndex(l => l.id === lecture.id);
+    if (currentIndex !== -1 && currentIndex < playlistLectures.length - 1) {
+      onSelectLecture(playlistLectures[currentIndex + 1]);
+    }
+  };
+
+  const playPrevious = () => {
+    if (!playlistLectures || playlistLectures.length === 0 || !onSelectLecture) return;
+    const currentIndex = playlistLectures.findIndex(l => l.id === lecture.id);
+    if (currentIndex > 0) {
+      onSelectLecture(playlistLectures[currentIndex - 1]);
+    }
+  };
+
+  // Keyboard shortcut: N = next, P = previous, F = fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not trigger if typing in forms
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true')) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === 'n') {
+        e.preventDefault();
+        playNext();
+      } else if (key === 'p') {
+        e.preventDefault();
+        playPrevious();
+      } else if (key === 'f') {
+        e.preventDefault();
+        toggleScreenSim();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lecture, playlistLectures, watchedVideos]);
 
   useEffect(() => {
     const videoId = getYoutubeId(lecture.videoUrl);
@@ -132,14 +219,20 @@ export default function VideoPlayer({
   const [reviewComment, setReviewComment] = useState<string>('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [localReviews, setLocalReviews] = useState<Review[]>([]);
+  const averageRating = localReviews.length > 0
+    ? (localReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / localReviews.length).toFixed(1)
+    : null;
   const [authWarning, setAuthWarning] = useState<string | null>(null);
 
   // Screen orientation fullscreen simulation
   const [isFullscreenMode, setIsFullscreenMode] = useState(false);
   const [isNativeFsActive, setIsNativeFsActive] = useState(false);
-  const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth);
+  const [isPortrait, setIsPortrait] = useState(true); // Safe default for hydration
 
   useEffect(() => {
+    // Correctly query viewport dimensions on initial client-only layout mount
+    setIsPortrait(window.innerHeight > window.innerWidth);
+    
     const handleResize = () => {
       setIsPortrait(window.innerHeight > window.innerWidth);
     };
@@ -197,6 +290,14 @@ export default function VideoPlayer({
     };
   }, []);
 
+  // Clean up gesture/transient interaction timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+      if (transientTimeoutRef.current) clearTimeout(transientTimeoutRef.current);
+    };
+  }, []);
+
   const shouldRotate = isFullscreenMode && isPortrait;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -242,10 +343,10 @@ export default function VideoPlayer({
       initialized = true;
       const videoId = getYoutubeId(lecture.videoUrl);
 
-      // Clean up previous container
-      const parent = document.getElementById('yt-iframe-container');
-      if (parent) {
-        parent.innerHTML = '<div id="yt-iframe-player" class="w-full h-full"></div>';
+      // Clean up previous container and recreate #yt-iframe-player inside it
+      const container = document.getElementById('yt-iframe-container');
+      if (container) {
+        container.innerHTML = '<div id="yt-iframe-player" style="position: absolute; top:0; left:0; width:100%; height:100%; border:none; z-index:1; pointer-events:none;"></div>';
       }
 
       setPlayerReady(false);
@@ -261,9 +362,8 @@ export default function VideoPlayer({
           fs: 0,
           modestbranding: 1,
           rel: 0,
-          showinfo: 0,
           iv_load_policy: 3,
-          cc_load_policy: isCaptionsOn ? 1 : 0,
+          playsinline: 1,
           enablejsapi: 1,
         },
         events: {
@@ -273,7 +373,6 @@ export default function VideoPlayer({
             setPlayerReady(true);
             setIsYtReady(true);
             event.target.setVolume(volume);
-            event.target.setPlaybackRate(playbackSpeed);
             try {
               event.target.playVideo();
             } catch (err) {
@@ -294,6 +393,22 @@ export default function VideoPlayer({
               setIsPlaying(false);
             } else if (event.data === 0) {
               setIsPlaying(false);
+              // Auto-mark completed lecture as watched
+              setWatchedVideos(prev => {
+                if (!prev.includes(lecture.id)) {
+                  const newList = [...prev, lecture.id];
+                  localStorage.setItem('watched_videos', JSON.stringify(newList));
+                  return newList;
+                }
+                return prev;
+              });
+              // Auto-advance
+              if (playlistLectures && playlistLectures.length > 0 && onSelectLecture) {
+                const currentIndex = playlistLectures.findIndex(l => l.id === lecture.id);
+                if (currentIndex !== -1 && currentIndex < playlistLectures.length - 1) {
+                  onSelectLecture(playlistLectures[currentIndex + 1]);
+                }
+              }
             }
           }
         }
@@ -477,9 +592,13 @@ export default function VideoPlayer({
       if (isGuest || user.uid === 'guest') {
         setIsLiked(!!user.likedContent?.includes(lecture.id));
         setIsSaved(!!user.savedContent?.includes(lecture.id));
+        setIsWatchLater(!!user.watchLaterContent?.includes(lecture.id));
       } else {
         fetchLikedLecturesIds().then(ids => setIsLiked(ids.includes(lecture.id)));
-        fetchWatchLaterIds().then(ids => setIsSaved(ids.includes(lecture.id)));
+        fetchWatchLaterIds().then(ids => {
+          setIsSaved(ids.includes(lecture.id));
+          setIsWatchLater(ids.includes(lecture.id));
+        });
       }
     }
 
@@ -490,7 +609,16 @@ export default function VideoPlayer({
     fetchReviews(lecture.teacherId || lecture.id)
       .then(revs => setLocalReviews(revs))
       .catch(err => console.warn('Could not fetch reviews:', err));
-  }, [lecture, user]);
+  }, [
+    lecture.id,
+    lecture.teacherId,
+    isGuest,
+    user?.uid,
+    user?.likedContent,
+    user?.savedContent,
+    user?.watchLaterContent,
+    user?.hiddenContent
+  ]);
 
   // Set up timer loop to get actual current position and duration from YT Player API
   useEffect(() => {
@@ -548,13 +676,65 @@ export default function VideoPlayer({
     if (!isLocked) {
       controlsTimeoutRef.current = setTimeout(() => {
         setShowControls(false);
-      }, 3500);
+      }, 2500); // Set to at least 2.5 seconds (2500ms) of persistent screen time!
     }
   };
 
   const showWarning = (msg: string) => {
     setAuthWarning(msg);
     setTimeout(() => setAuthWarning(null), 4000);
+  };
+
+  const triggerTransientIndicator = (type: 'play' | 'pause') => {
+    setTransientAction(type);
+    if (transientTimeoutRef.current) clearTimeout(transientTimeoutRef.current);
+    transientTimeoutRef.current = setTimeout(() => {
+      setTransientAction(null);
+    }, 600);
+  };
+
+  const handleSingleOrDoubleTap = (
+    e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, 
+    clientX: number, 
+    clientY: number
+  ) => {
+    e.stopPropagation();
+    if (isLocked) return;
+    resetControlsTimer();
+    
+    const now = Date.now();
+    const timeDiff = now - lastClickTimeRef.current;
+    
+    if (timeDiff < 300) {
+      // Double tap!
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+      lastClickTimeRef.current = 0; // reset
+      
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const relativeX = clientX - rect.left;
+        if (relativeX < rect.width / 2) {
+          handleSeekOffset('backward');
+        } else {
+          handleSeekOffset('forward');
+        }
+      }
+    } else {
+      // Single tap potential
+      lastClickTimeRef.current = now;
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+      
+      clickTimeoutRef.current = setTimeout(() => {
+        setIsDescExpanded(false);
+        setShowControls(prev => {
+          const nextState = !prev;
+          if (nextState) {
+            resetControlsTimer();
+          }
+          return nextState;
+        });
+      }, 250);
+    }
   };
 
   const handlePlayPause = () => {
@@ -565,15 +745,19 @@ export default function VideoPlayer({
         if (isPlaying) {
           ytPlayerRef.current.pauseVideo();
           setIsPlaying(false);
+          triggerTransientIndicator('pause');
         } else {
           ytPlayerRef.current.playVideo();
           setIsPlaying(true);
+          triggerTransientIndicator('play');
         }
       } catch (e) {
         console.warn(e);
       }
     } else {
-      setIsPlaying(!isPlaying);
+      const nextPlaying = !isPlaying;
+      setIsPlaying(nextPlaying);
+      triggerTransientIndicator(nextPlaying ? 'play' : 'pause');
     }
   };
 
@@ -697,6 +881,22 @@ export default function VideoPlayer({
       : [...currentSaved, lecture.id];
 
     await updatePreferences({ savedContent: updatedSaved });
+  };
+
+  const handleWatchLaterToggle = async () => {
+    if (!user) {
+      showWarning("Sign in to save this lesson to Watch Later.");
+      return;
+    }
+    const current = isWatchLater;
+    setIsWatchLater(!current);
+    
+    const currentWatchLater = user.watchLaterContent || [];
+    const updatedWatchLater = current
+      ? currentWatchLater.filter((id: string) => id !== lecture.id)
+      : [...currentWatchLater, lecture.id];
+
+    await updatePreferences({ watchLaterContent: updatedWatchLater });
     await toggleWatchLater(lecture, current);
   };
 
@@ -781,11 +981,13 @@ export default function VideoPlayer({
   // Subtitles / Captions dynamically matched to the video timeline
   const getSubtitlesText = () => {
     const s = currentTimeSec % 180;
-    if (s < 15) return "Welcome back! Today we are conducting a complete Periodicity One-Shot lecture masterclass.";
-    if (s < 35) return "Let's review the chemical trends of transition elements and ionization potentials.";
-    if (s < 55) return "Observe the Lanthanides block and standard electron configurations. Focus on these keys.";
-    if (s < 75) return "These specific trends are highly expected questions for both JEE and NEET exams.";
-    return "Make sure to record these atomic sizing scales inside your notes. Let's practice further.";
+    const subj = lecture.subject || "Concepts";
+    const tit = lecture.title || "Lesson";
+    if (s < 15) return `Welcome back! Today we are studying: ${tit || "this lesson"}.`;
+    if (s < 35) return `Let's review the fundamental theories of ${subj} and their practical applications.`;
+    if (s < 55) return "Observe this core formula and standard derivations. Focus on these keys.";
+    if (s < 75) return "These specific trends are highly expected questions for your competitive exams.";
+    return "Make sure to record these notes in your notebook. Let's practice further.";
   };
 
   const handleReviewSubmitAction = async (e: React.FormEvent) => {
@@ -822,540 +1024,626 @@ export default function VideoPlayer({
     }
   };
 
-  const nextUpLessons = playlistLectures.filter(l => l.id !== lecture.id).slice(0, 4);
+  const nextUpLessons = React.useMemo(() => {
+    // 1. Same playlist items first
+    const samePlaylist = playlistLectures.filter(l => l.id !== lecture.id && l.playlistId === lecture.playlistId);
+    
+    // 2. Same subject items next
+    const sameSubject = playlistLectures.filter(l => l.id !== lecture.id && l.playlistId !== lecture.playlistId && l.subject === lecture.subject);
+    
+    // 3. Any other items
+    const rest = playlistLectures.filter(l => l.id !== lecture.id && l.playlistId !== lecture.playlistId && l.subject !== lecture.subject);
+    
+    // Combine them up to a nice, long list (e.g., 24 items)
+    return [...samePlaylist, ...sameSubject, ...rest].slice(0, 24);
+  }, [playlistLectures, lecture.id, lecture.playlistId, lecture.subject]);
+
+  const subscriberCountFormatted = React.useMemo(() => {
+    if (channelInfo?.subscriberCountFormatted) return channelInfo.subscriberCountFormatted;
+    // Generate realistic sub count based on teacherName / channelTitle length/hash
+    const name = channelInfo?.channelTitle || lecture.teacherName || "Verified Educator";
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const val = 120 + Math.abs(hash % 480); // 120k to 600k
+    return `${val}K`;
+  }, [channelInfo, lecture.teacherName]);
 
   return (
-    <div className={`w-full bg-[#050506] text-zinc-150 font-sans selection:bg-orange-400 selection:text-black flex flex-col justify-start transition-all duration-300 min-h-screen ${isFullscreenMode ? 'px-0 py-0 overflow-hidden' : ''}`}>
-      
-      {/* TOP INTEGRATED LECTURE HEADER */}
-      {!isFullscreenMode && (
-        <div className="w-full max-w-5xl mx-auto px-4 py-3 bg-[#09090B] border border-neutral-900 rounded-t-2xl flex justify-between items-center mt-3 z-20">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={onClose}
-              className="p-2 bg-neutral-900 hover:bg-[#1A1A1F] rounded-xl border border-neutral-800 text-white cursor-pointer transition-colors flex items-center gap-1.5 focus:outline-none"
-              title="Go Back"
+    <div className={`w-full bg-[#000000] text-white font-sans selection:bg-red-650 selection:text-white flex flex-col justify-start transition-all duration-300 min-h-screen ${isFullscreenMode ? 'px-0 py-0 overflow-hidden' : ''}`}>
+
+      {/* Main Grid for player and playlist sidebar support */}
+      <div className={`w-full max-w-7xl mx-auto ${isFullscreenMode ? '' : 'pb-6'}`}>
+        <div className={`flex flex-col gap-6 w-full ${isFullscreenMode ? '' : ''}`}>
+          
+          {/* Left Column: Player core and video specifications (col-span-8) */}
+          <div className="w-full">
+
+            {/* 1. NATIVE INTEGRATED YOUTUBE PLAYER CONTAINER */}
+            <div 
+              ref={containerRef}
+              onMouseEnter={() => {
+                setShowControls(true);
+                resetControlsTimer();
+              }}
+              onMouseMove={() => {
+                setShowControls(true);
+                resetControlsTimer();
+              }}
+              onMouseLeave={() => {
+                if (isPlaying) {
+                  // delay hiding the controls or rely on controlsTimeout
+                  if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+                  controlsTimeoutRef.current = setTimeout(() => {
+                    setShowControls(false);
+                  }, 2500); // 2.5 seconds!
+                }
+              }}
+              className={`player-wrapper relative bg-zinc-950 transition-all duration-300 flex flex-col items-center justify-center group overflow-hidden select-none ${
+                isFullscreenMode 
+                  ? 'border-0' 
+                  : 'w-full border border-white/5 aspect-[16/9] rounded-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative max-w-full'
+              }`}
+              style={{ 
+                filter: `brightness(${brightness}%)`,
+                position: isFullscreenMode ? 'fixed' : 'relative',
+                top: isFullscreenMode ? (shouldRotate ? '50%' : '0') : undefined,
+                left: isFullscreenMode ? (shouldRotate ? '50%' : '0') : undefined,
+                width: isFullscreenMode 
+                  ? (isNativeFsActive 
+                      ? '100vw' 
+                      : (shouldRotate ? '100vh' : '100vw')
+                    )
+                  : '100%',
+                height: isFullscreenMode 
+                  ? (isNativeFsActive 
+                      ? '100vh' 
+                      : (shouldRotate ? '100vw' : '100vh')
+                    )
+                  : 'auto',
+                transform: isFullscreenMode 
+                  ? (shouldRotate ? 'translate(-50%, -50%) rotate(90deg)' : 'none') 
+                  : 'none',
+                transformOrigin: (isFullscreenMode && shouldRotate) ? 'center center' : undefined,
+                zIndex: isFullscreenMode ? 99999 : undefined,
+                maxWidth: isFullscreenMode ? 'none' : '100%',
+                aspectRatio: '16/9',
+                overflow: 'hidden',
+                background: '#000'
+              }}
             >
-              <ChevronLeft className="w-4 h-4 text-orange-500" />
-              <span className="text-xs font-semibold mr-1">Back</span>
-            </button>
-            <div className="text-left">
-              <h4 className="text-xs sm:text-sm font-bold text-white leading-tight">
-                {lecture.title}
-              </h4>
-              <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wide block">
-                {lecture.subject} • {lecture.examType || 'JEE'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}      {/* 1. NATIVE INTEGRATED YOUTUBE PLAYER CONTAINER */}
-      <div 
-        ref={containerRef}
-        onMouseEnter={() => {
-          setShowControls(true);
-          resetControlsTimer();
-        }}
-        onMouseMove={() => {
-          setShowControls(true);
-          resetControlsTimer();
-        }}
-        onMouseLeave={() => {
-          if (isPlaying) {
-            setShowControls(false);
-          }
-        }}
-        className={`relative w-full bg-black border border-neutral-900 transition-all duration-300 flex flex-col items-center justify-center group overflow-hidden select-none ${
-          isFullscreenMode ? '' : 'aspect-[16/10] w-full max-w-5xl mx-auto rounded-b-2xl shadow-2xl relative'
-        }`}
-        style={{ 
-          filter: `brightness(${brightness}%)`,
-          position: isFullscreenMode ? (isNativeFsActive ? 'absolute' : 'fixed') : 'relative',
-          top: isFullscreenMode ? (isNativeFsActive ? '0' : '50%') : undefined,
-          left: isFullscreenMode ? (isNativeFsActive ? '0' : '50%') : undefined,
-          width: isFullscreenMode 
-            ? (isNativeFsActive ? '100%' : (shouldRotate ? '100vh' : '100vw')) 
-            : '100%',
-          height: isFullscreenMode 
-            ? (isNativeFsActive ? '100%' : (shouldRotate ? '100vw' : '100vh')) 
-            : undefined,
-          transform: isFullscreenMode 
-            ? (isNativeFsActive ? 'none' : (shouldRotate ? 'translate(-50%, -50%) rotate(90deg)' : 'translate(-50%, -50%)')) 
-            : 'none',
-          transformOrigin: isFullscreenMode ? 'center center' : undefined,
-          zIndex: isFullscreenMode ? 9999 : undefined,
-          maxWidth: isFullscreenMode ? '100%' : '64rem', // max-w-5xl is 64rem
-          aspectRatio: isFullscreenMode ? undefined : '16/10',
-        }}
-      >
-        {/* Real YouTube Player Iframe - Fully interactable behind, clicks handled by custom Hud */}
-        <div 
-          id="yt-iframe-container" 
-          className={`z-10 transition-all duration-300 ${
-            hasPlayed ? 'pointer-events-none' : 'pointer-events-auto select-auto'
-          } ${
-            isFullscreenMode 
-              ? 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full max-w-full max-h-full aspect-[16/9]' 
-              : 'absolute inset-0 w-full h-full'
-          }`} 
+
+              {/* [2] #yt-iframe-container (hosting #yt-iframe-player dynamically) */}
+              <div 
+                id="yt-iframe-container" 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 1,
+            pointerEvents: 'none',
+            overflow: 'hidden'
+          }}
         />
 
-        {/* CUSTOM HUD CONTROLS OVERLAY (MIMICS SCREENSHOT 3) - Only active once the video has played/started */}
-        {hasPlayed && (
+        {/* [3] Unified Touch/Gesture detection area (100% height overlay) */}
         <div 
-          className="absolute inset-0 z-20 flex flex-col justify-between pointer-events-none"
-          onClick={(e) => {
-            // Clicking blank spaces in overlay toggles controls
-            setShowControls(!showControls);
-            resetControlsTimer();
+          className="absolute inset-0 w-full h-full z-10 cursor-pointer select-none outline-none active:bg-transparent"
+          onPointerDown={(e) => {
+            if (e.pointerType === 'mouse') {
+              handlePointerStart(e.clientX, e.clientY);
+            }
           }}
-        >
-          {/* Black fade gradients behind controls */}
-          <AnimatePresence>
-            {showControls && (
-              <motion.div
+          onPointerMove={(e) => {
+            if (e.pointerType === 'mouse' || isDragging) {
+              handlePointerMove(e.clientY);
+            }
+          }}
+          onPointerUp={() => {
+            handlePointerEnd();
+          }}
+          onTouchStart={(e) => {
+            const t = e.touches[0];
+            handlePointerStart(t.clientX, t.clientY);
+          }}
+          onTouchMove={(e) => {
+            const t = e.touches[0];
+            handlePointerMove(t.clientY);
+          }}
+          onTouchEnd={() => {
+            handlePointerEnd();
+          }}
+          onClick={(e) => {
+            handleSingleOrDoubleTap(e, e.clientX, e.clientY);
+          }}
+          style={{
+            background: 'transparent',
+            touchAction: 'none',
+            WebkitTapHighlightColor: 'transparent'
+          }}
+        />
+
+        {/* [4] Gestures overlay & feedback indicators */}
+        {/* Brightness indicator (Left screen) */}
+        {/* Side Sliders - Left Edge: Brightness Slider */}
+        <AnimatePresence>
+          {showBrightnessIndicator && (
+            <motion.div 
+              initial={{ opacity: 0, x: -15 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -15 }}
+              className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-30"
+            >
+              <Sun className="w-3.5 h-3.5 text-white" />
+              <div 
+                className="relative w-[1.5px] h-20 bg-white/20 rounded-full overflow-visible cursor-pointer py-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clickY = e.clientY - rect.top;
+                  const pct = 1 - (clickY / rect.height);
+                  const newBright = Math.max(30, Math.min(150, Math.round(30 + (pct * 120))));
+                  handleBrightnessChange(newBright);
+                }}
+              >
+                <div className="absolute bottom-0 left-0 right-0 bg-white rounded-full" style={{ height: `${((brightness - 30) / 120) * 100}%` }} />
+                <div className="absolute w-2 h-2 bg-white rounded-full -left-[3px] shadow" style={{ bottom: `calc(${((brightness - 30) / 120) * 100}% - 4px)` }} />
+              </div>
+              <span className="text-[7px] font-mono text-zinc-400 uppercase tracking-tight">Bright</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Volume indicator (Right screen) */}
+        {/* Side Sliders - Right Edge: Volume Slider */}
+        <AnimatePresence>
+          {showVolumeIndicator && (
+            <motion.div 
+              initial={{ opacity: 0, x: 15 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 15 }}
+              className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-30"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-white" />
+              <div 
+                className="relative w-[1.5px] h-20 bg-white/20 rounded-full overflow-visible cursor-pointer py-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clickY = e.clientY - rect.top;
+                  const pct = 1 - (clickY / rect.height);
+                  const newVol = Math.max(0, Math.min(100, Math.round(pct * 100)));
+                  handleVolumeChange(newVol);
+                }}
+              >
+                <div className="absolute bottom-0 left-0 right-0 bg-white rounded-full" style={{ height: `${volume}%` }} />
+                <div className="absolute w-2 h-2 bg-white rounded-full -left-[3px] shadow" style={{ bottom: `calc(${volume}% - 4px)` }} />
+              </div>
+              <span className="text-[7px] font-mono text-zinc-400 uppercase tracking-tight">Volume</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Double Tap Seek Feedback Indicator bubbles */}
+        <AnimatePresence>
+          {showSeekOverlay && (
+            <motion.div 
+               initial={{ opacity: 0, scale: 0.8 }}
+               animate={{ opacity: 1, scale: 1 }}
+               exit={{ opacity: 0, scale: 0.8 }}
+               className={`absolute z-30 bg-white/10 border border-white/15 backdrop-blur-md px-4 py-2 rounded-none flex flex-col items-center gap-1 pointer-events-none font-mono ${
+                showSeekOverlay === 'backward' ? 'left-1/4' : 'right-1/4'
+               }`}
+            >
+              <span className="text-[9px] font-bold text-white tracking-wider uppercase">
+                 {showSeekOverlay === 'backward' ? '◀◀ 10s REWIND' : 'FORWARD 10s ▶▶'}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Centered animative transient play/pause status bubble indicator */}
+        <AnimatePresence>
+          {transientAction && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeInOut" }}
+              className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center z-35 pointer-events-none"
+            >
+              {transientAction === 'play' ? (
+                <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+              ) : (
+                <Pause className="w-6 h-6 text-white fill-white" />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Top Header HUD bar inside the video player */}
+        <AnimatePresence>
+          {(showControls || !isPlaying) && (
+            <motion.div
+              initial={{ opacity: 0, y: -15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="absolute top-0 left-0 w-full px-4 pt-4 pb-12 bg-gradient-to-b from-black/90 via-black/45 to-transparent z-25 flex items-center justify-between pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Left Side: Back Arrow Button and Title + Subtitle information */}
+              <div className="flex items-center gap-3 min-w-0 flex-1 text-left">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onClose) onClose();
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-full text-white active:scale-90 transition-all cursor-pointer flex-shrink-0"
+                  title="Close and Go Back"
+                >
+                  <ChevronLeft className="w-5 h-5 text-white" />
+                </button>
+                <div className="flex flex-col leading-tight min-w-0">
+                  <h2 className="text-xs sm:text-sm font-bold text-white truncate drop-shadow">
+                    {lecture.title || "Periodic Table and Chemistry Periodicity One-Shot"}
+                  </h2>
+                  <span className="text-[9px] sm:text-[10px] text-zinc-350 font-medium tracking-wide drop-shadow mt-0.5">
+                    {(lecture.subject || "Chemistry")} • {(lecture.examType || "JEE")}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right Side Tools: Settings only (Lock and Cast completely removed) */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* Settings Cog Icon (Toggles custom Bottom-Sheet) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSettingsPopup(!showSettingsPopup);
+                    setActivePopupSection('main');
+                  }}
+                  className={`p-1.5 rounded-full text-white active:scale-95 transition-all cursor-pointer ${showSettingsPopup ? 'bg-white/20' : 'hover:bg-white/10'}`}
+                  title="Settings"
+                >
+                  <Settings className="w-4.5 h-4.5 text-white" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Central Minimalist Play/Pause backed by 10s Rewind & Fast-forward flanked options */}
+        <AnimatePresence>
+          {(showControls || !isPlaying) && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute inset-0 m-auto flex items-center justify-center gap-6 z-30 pointer-events-auto h-16 w-60"
+            >
+              {/* Rewind 10s */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSeekOffset('backward');
+                }}
+                className="w-12 h-12 rounded-full border border-white/30 bg-black/35 hover:bg-black/55 text-white flex items-center justify-center transition-all cursor-pointer relative hover:border-white/50 active:scale-95"
+                title="Rewind 10s"
+              >
+                <RotateCcw className="w-6 h-6 stroke-[1.5]" />
+                <span className="absolute text-[8px] font-sans font-bold mt-1.5">10</span>
+              </button>
+
+              {/* Central Play/Pause (Premium Hollow Ring Layout Matching Screenshot) */}
+              <motion.button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePlayPause();
+                }}
+                whileTap={{ scale: 0.9 }}
+                animate={{ scale: [1, 1.15, 1] }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                key={isPlaying ? "playing" : "paused"}
+                className="w-16 h-16 rounded-full border border-white/30 bg-black/35 hover:bg-black/55 text-white flex items-center justify-center transition-all cursor-pointer hover:border-white/50"
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause className="w-6 h-6 fill-current text-white" />
+                ) : (
+                  <Play className="w-6 h-6 fill-current text-white ml-1" />
+                )}
+              </motion.button>
+
+              {/* Fast Forward 10s */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSeekOffset('forward');
+                }}
+                className="w-12 h-12 rounded-full border border-white/30 bg-black/35 hover:bg-black/55 text-white flex items-center justify-center transition-all cursor-pointer relative hover:border-white/50 active:scale-95"
+                title="Forward 10s"
+              >
+                <RotateCw className="w-6 h-6 stroke-[1.5]" />
+                <span className="absolute text-[8px] font-sans font-bold mt-1.5">10</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bottom Time, Slider and Fullscreen HUD wrapper */}
+        <AnimatePresence>
+          {(showControls || !isPlaying) && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="absolute bottom-0 left-0 w-full px-4 pt-10 pb-4 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-25 flex flex-col gap-2.5 pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Bottom Timeline Row containing Left Time + Red Track + Right Time + Fullscreen Button */}
+              <div className="flex items-center gap-3.5 w-full select-none">
+                {/* Current Time Stamp */}
+                <span className="text-[11px] font-mono text-zinc-300 font-medium select-none min-w-[34px] text-left">
+                  {formatSecToClock(currentTimeSec)}
+                </span>
+                
+                {/* Slim Clickable Timeline Seek Slider with Circle handle indicator */}
+                <div 
+                  className="relative flex-1 h-1 bg-white/20 rounded-full cursor-pointer py-1.5 flex items-center group/timeline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const width = rect.width;
+                    const newPct = clickX / width;
+                    const targetSecs = Math.max(0, Math.min(totalDurationSec, Math.floor(newPct * totalDurationSec)));
+                    handleTimelineChange(targetSecs);
+                  }}
+                >
+                  <div className="absolute left-0 right-0 h-1 bg-white/20 rounded-full" />
+                  <div 
+                    className="absolute left-0 h-1 bg-[#FF0000] rounded-full animate-none" 
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                  <div 
+                    className="absolute w-3 h-3 rounded-full bg-[#FF0005] border border-white -translate-x-1/2 scale-100 group-hover/timeline:scale-125 transition-transform"
+                    style={{ left: `${progressPercent}%` }}
+                  />
+                </div>
+
+                {/* Total Duration Time Stamp */}
+                <span className="text-[11px] font-mono text-zinc-300 font-medium select-none min-w-[34px] text-right">
+                  {formatSecToClock(totalDurationSec)}
+                </span>
+
+                {/* Fullscreen corners Bracket maximize/minimize toggle */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleScreenSim();
+                  }}
+                  className="p-1 hover:bg-white/10 rounded-lg text-white transition-all active:scale-90 cursor-pointer flex items-center justify-center shrink-0 ml-1.5"
+                  title={isFullscreenMode ? "Exit Fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreenMode ? (
+                    <Minimize className="w-5 h-5 text-white" />
+                  ) : (
+                    <Maximize className="w-5 h-5 text-white" />
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Playback Settings Bottom Sheet */}
+        <AnimatePresence>
+          {showSettingsPopup && (
+            <>
+              {/* Backdrop covering the visual player stage */}
+              <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/80 pointer-events-none"
+                onClick={() => {
+                  setShowSettingsPopup(false);
+                  setActivePopupSection('main');
+                }}
+                className="absolute inset-0 bg-black/75 backdrop-blur-sm z-35"
               />
-            )}
-          </AnimatePresence>
 
-          {/* Custom Top Navigation Bar */}
-          <AnimatePresence>
-            {showControls && (
-              <motion.div 
-                initial={{ y: -20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -20, opacity: 0 }}
-                className="w-full flex items-center justify-between p-4 pointer-events-auto z-30"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={onClose}
-                    className="p-2 bg-black/40 hover:bg-black/60 rounded-full border border-white/10 text-white cursor-pointer transition-colors"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <div className="text-left">
-                    <h1 className="text-xs sm:text-sm font-bold text-white tracking-wide leading-none">{lecture.title}</h1>
-                    <span className="text-[10px] font-mono font-semibold text-zinc-400 mt-1 block uppercase tracking-wider">
-                      {lecture.subject} • {lecture.examType || 'JEE'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Top-Right Control Actions */}
-                <div className="flex items-center gap-3">
-                  {/* Cast/Screen Share Icon */}
-                  <button 
-                    onClick={() => showWarning("Screen cast requested. Searching for available nearby displays...")}
-                    className="p-2 bg-black/40 hover:bg-black/60 rounded-full border border-white/10 text-white cursor-pointer transition-colors"
-                    title="Cast Display"
-                  >
-                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 11.02 20M2 8A13 13 0 0 1 16.14 20" strokeLinecap="round" />
-                      <rect x="2" y="4" width="20" height="16" rx="2" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                  
-                  {/* Settings Cog Icon */}
-                  <button 
-                    onClick={() => {
-                      setShowSettingsPopup(!showSettingsPopup);
-                      setActivePopupSection('main');
-                      resetControlsTimer();
-                    }}
-                    className={`p-2 bg-black/40 hover:bg-black/60 rounded-full border border-white/10 text-white cursor-pointer transition-colors ${showSettingsPopup ? 'text-orange-500 border-orange-500/20' : ''}`}
-                    title="Settings"
-                  >
-                    <Settings className="w-5 h-5" />
-                  </button>
-                  
-                  {/* Triple Dots/Options Ellipsis (Vertical) */}
-                  <button 
-                    onClick={() => showWarning("Advanced material telemetry verified secure.")}
-                    className="p-2 bg-black/40 hover:bg-black/60 rounded-full border border-white/10 text-white cursor-pointer transition-colors"
-                    title="Diagnostics"
-                  >
-                    <svg className="w-5 h-5 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <circle cx="12" cy="5" r="1.5" fill="currentColor" />
-                      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                      <circle cx="12" cy="19" r="1.5" fill="currentColor" />
-                    </svg>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Center Pointer Area: Vol/Bright swipe drag & double-tap offsets */}
-          <div 
-            className="flex-1 w-full flex items-center justify-between px-6 pointer-events-auto cursor-pointer relative"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              handlePointerStart(e.clientX, e.clientY);
-            }}
-            onPointerMove={(e) => {
-              e.stopPropagation();
-              handlePointerMove(e.clientY);
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              handlePointerEnd();
-            }}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              handleContainerDoubleClick(e);
-            }}
-          >
-            {/* Brightness indicator (Left screen) */}
-            <AnimatePresence>
-              {showBrightnessIndicator && (
-                <motion.div 
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -30 }}
-                  className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-40 bg-black/75 p-3 rounded-2xl border border-white/10 shadow-2xl pointer-events-none"
-                >
-                  <Sun className="w-4 h-4 text-amber-400 animate-pulse" />
-                  <div className="w-1.5 h-20 bg-zinc-800 rounded-full overflow-hidden relative">
-                    <div 
-                      className="absolute bottom-0 w-full bg-[#F97316] transition-all duration-75" 
-                      style={{ height: `${((brightness - 30) / 120) * 100}%` }} 
-                    />
-                  </div>
-                  <span className="text-[8px] font-mono font-bold text-white uppercase tracking-tight">Bright</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Volume indicator (Right screen) */}
-            <AnimatePresence>
-              {showVolumeIndicator && (
-                <motion.div 
-                  initial={{ opacity: 0, x: 30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 30 }}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-40 bg-black/75 p-3 rounded-2xl border border-white/10 shadow-2xl pointer-events-none"
-                >
-                  <Volume2 className="w-4 h-4 text-orange-500 animate-pulse" />
-                  <div className="w-1.5 h-20 bg-zinc-800 rounded-full overflow-hidden relative">
-                    <div 
-                      className="absolute bottom-0 w-full bg-[#F97316] transition-all duration-75" 
-                      style={{ height: `${volume}%` }} 
-                    />
-                  </div>
-                  <span className="text-[8px] font-mono font-bold text-white uppercase tracking-tight">Volume</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Center HUD Buttons: Rewind, Play/Pause, Fast Forward */}
-            <div className="absolute inset-0 flex items-center justify-center gap-10 pointer-events-none">
-              <AnimatePresence>
-                {showControls && (
-                  <>
-                    {/* Rewind 10 Seconds */}
-                    <motion.button
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSeekOffset('backward');
-                      }}
-                      className="pointer-events-auto p-3.5 bg-black/50 hover:bg-black/75 border border-white/10 rounded-full text-white cursor-pointer shadow-lg transition-transform hover:scale-105"
-                      title="10s Back"
-                    >
-                      <svg className="w-5.5 h-5.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" strokeLinecap="round" strokeLinejoin="round" />
-                        <polyline points="3 3 3 8 8 8" strokeLinecap="round" strokeLinejoin="round" />
-                        <text x="50%" y="60%" fontSize="6.5" fontWeight="black" textAnchor="middle" fill="currentColor" dy=".3em">10</text>
-                      </svg>
-                    </motion.button>
-
-                    {/* Master Play / Pause */}
-                    <motion.button
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1.1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayPause();
-                      }}
-                      className="pointer-events-auto p-5.5 bg-[#F97316] hover:bg-orange-400 rounded-full text-black cursor-pointer shadow-xl transition-all hover:scale-105"
-                      title={isPlaying ? "Pause" : "Play"}
-                    >
-                      {isPlaying ? <Pause className="w-6.5 h-6.5 fill-current" /> : <Play className="w-6.5 h-6.5 fill-current ml-0.5" />}
-                    </motion.button>
-
-                    {/* Fast Forward 10 Seconds */}
-                    <motion.button
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSeekOffset('forward');
-                      }}
-                      className="pointer-events-auto p-3.5 bg-black/50 hover:bg-black/75 border border-white/10 rounded-full text-white cursor-pointer shadow-lg transition-transform hover:scale-105"
-                      title="10s Forward"
-                    >
-                      <svg className="w-5.5 h-5.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" strokeLinecap="round" strokeLinejoin="round" />
-                        <polyline points="21 3 21 8 16 8" strokeLinecap="round" strokeLinejoin="round" />
-                        <text x="50%" y="60%" fontSize="6.5" fontWeight="black" textAnchor="middle" fill="currentColor" dy=".3em">10</text>
-                      </svg>
-                    </motion.button>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Double Tap Seek Feedback Indicator bubbles */}
-            <AnimatePresence>
-              {showSeekOverlay && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className={`absolute z-35 bg-orange-500/15 border border-orange-500/10 backdrop-blur-md px-4 py-2 rounded-2xl flex flex-col items-center gap-1 pointer-events-none ${
-                    showSeekOverlay === 'backward' ? 'left-1/4' : 'right-1/4'
-                  }`}
-                >
-                  <span className="text-[9px] font-mono font-bold text-orange-500 tracking-wider uppercase">
-                    {showSeekOverlay === 'backward' ? '◀◀ 10s REWIND' : 'FORWARD 10s ▶▶'}
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Custom Bottom Progress Bar / Timeline */}
-          <AnimatePresence>
-            {showControls && (
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                className="w-full p-4 pointer-events-auto flex flex-col gap-2.5 z-30"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Embedded Subtitles when Caption On */}
-                {isCaptionsOn && (
-                  <div className="mx-auto max-w-xl text-center bg-black/90 px-4 py-2 rounded-xl border border-white/5 shadow-2xl pointer-events-none">
-                    <p className="text-[11px] sm:text-xs font-mono text-orange-300 leading-normal">
-                      {getSubtitlesText()}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-4">
-                  {/* Progress Time Elapsed */}
-                  <span className="text-[10px] font-mono font-semibold text-zinc-300 w-12 text-left">
-                    {formatSecToClock(currentTimeSec)}
-                  </span>
-
-                  {/* Horizontal premium orange progress bar */}
-                  <div className="flex-1 group relative flex items-center h-5 cursor-pointer">
-                    <input 
-                      type="range"
-                      min="0"
-                      max={totalDurationSec || 100}
-                      value={currentTimeSec}
-                      onChange={(e) => handleTimelineChange(parseInt(e.target.value))}
-                      className="w-full absolute inset-0 opacity-0 cursor-pointer z-42"
-                    />
-                    {/* Fake Progress Track with transitions */}
-                    <div className="w-full h-1 bg-white/10 rounded-full relative overflow-visible group-hover:h-1.5 transition-all">
-                      {/* Active orange timeline progress element */}
-                      <div 
-                        className="absolute top-0 left-0 h-full bg-[#F97316] rounded-full transition-all duration-75 relative"
-                        style={{ width: `${progressPercent}%` }}
-                      >
-                        <span className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 bg-white border-2 border-orange-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg shadow-black/50" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress Time Duration */}
-                  <span className="text-[10px] font-mono font-semibold text-zinc-300 w-12 text-right">
-                    {formatSecToClock(totalDurationSec)}
-                  </span>
-
-                  {/* Fullscreen button */}
-                  <button 
-                    onClick={toggleScreenSim}
-                    className="p-1.5 hover:bg-white/10 rounded-lg text-white transition-colors cursor-pointer"
-                    title={isFullscreenMode ? "Exit Fullscreen" : "Enter Fullscreen"}
-                  >
-                    {isFullscreenMode ? (
-                      <Minimize className="w-4 h-4 text-orange-500" />
-                    ) : (
-                      <Maximize className="w-4 h-4 text-orange-500" />
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* FLOATING SETTINGS MENU DRAWER TRAY (MATCHING PIC 3 GORGEOUS MENU) */}
-          <AnimatePresence>
-            {showSettingsPopup && (
+              {/* iOS style Slide-up Bottom-Sheet */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 15 }}
-                className="absolute right-4 top-16 z-50 bg-[#0E0E11]/95 backdrop-blur-md border border-white/10 p-4 rounded-2xl w-60 shadow-2xl pointer-events-auto text-left"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                className="absolute bottom-0 left-0 right-0 bg-zinc-950 border-t border-white/10 rounded-t-3xl p-5 z-40 select-none pb-6"
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* Horizontal handle pill indicator */}
+                <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+
                 {activePopupSection === 'main' && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                      <h4 className="text-[10px] font-mono font-semibold text-zinc-400 uppercase tracking-widest">Diagnostic Tray</h4>
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wider font-mono">Playback Settings</span>
                       <button 
                         onClick={() => setShowSettingsPopup(false)}
-                        className="text-zinc-500 hover:text-white p-0.5 rounded cursor-pointer"
+                        className="text-zinc-400 hover:text-white p-1 rounded-full hover:bg-white/5"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
 
-                    {/* Target Configuration buttons */}
-                    <div className="space-y-1">
-                      <button 
-                        onClick={() => setActivePopupSection('speed')}
-                        className="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer text-xs group"
-                      >
-                        <span className="text-zinc-300 font-sans group-hover:text-white">Playback Speed</span>
-                        <span className="text-orange-500 font-mono text-[11px] font-semibold">{playbackSpeed}x ➔</span>
-                      </button>
+                    {/* Option Group: Quality */}
+                    <button
+                      onClick={() => setActivePopupSection('quality')}
+                      className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-zinc-900 rounded-xl group-hover:bg-zinc-800 transition-colors">
+                          <Tv className="w-4 h-4 text-zinc-300" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white">Video Quality</span>
+                          <span className="text-[10px] text-zinc-500 font-medium font-sans">Toggle stream target resolution</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-red-500">{autoQuality ? 'Auto (Recommended)' : quality}</span>
+                        <ChevronRight className="w-4 h-4 text-zinc-500" />
+                      </div>
+                    </button>
 
-                      <button 
-                        onClick={() => setActivePopupSection('quality')}
-                        className="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer text-xs group"
-                      >
-                        <span className="text-zinc-300 font-sans group-hover:text-white">Video Quality</span>
-                        <span className="text-orange-500 font-mono text-[11px] font-semibold">{quality} ➔</span>
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          const nextCap = !isCaptionsOn;
-                          setIsCaptionsOn(nextCap);
-                          try {
-                            if (ytPlayerRef.current) {
-                              if (nextCap) {
-                                ytPlayerRef.current.loadModule("captions");
-                              } else {
-                                ytPlayerRef.current.unloadModule("captions");
-                              }
-                            }
-                          } catch (e) {
-                            console.warn(e);
-                          }
-                          setShowSettingsPopup(false);
-                        }}
-                        className="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer text-xs group"
-                      >
-                        <span className="text-zinc-300 font-sans group-hover:text-white">Captions Check</span>
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-semibold ${isCaptionsOn ? 'bg-orange-950/50 text-orange-400 border border-orange-900/45' : 'bg-zinc-800 text-zinc-400'}`}>
-                          {isCaptionsOn ? 'ON' : 'OFF'}
+                    {/* Option Group: Speed */}
+                    <button
+                      onClick={() => setActivePopupSection('speed')}
+                      className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-zinc-900 rounded-xl group-hover:bg-zinc-800 transition-colors">
+                          <Clock className="w-4 h-4 text-zinc-300 animate-none" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white">Playback Speed</span>
+                          <span className="text-[10px] text-zinc-500 font-medium font-sans">Speed factor of voice & video</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-red-500">
+                          {playbackSpeed === 1.0 ? 'Normal' : `${playbackSpeed}x`}
                         </span>
-                      </button>
+                        <ChevronRight className="w-4 h-4 text-zinc-500" />
+                      </div>
+                    </button>
 
-                      {/* Report action trigger */}
+                    {/* Option Group: Auto Quality Switcher Toggle */}
+                    <div className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-all">
+                      <div className="flex items-center gap-3 text-left">
+                        <div className="p-2 bg-zinc-900 rounded-xl">
+                          <Sparkles className="w-4 h-4 text-zinc-300" />
+                        </div>
+                        <div className="flex flex-col text-left">
+                          <span className="text-xs font-bold text-white">Auto Quality Toggle</span>
+                          <span className="text-[10px] text-zinc-500 font-medium font-sans">Synchronize quality to cellular bandwidth</span>
+                        </div>
+                      </div>
                       <button 
-                        onClick={() => {
-                          setShowSettingsPopup(false);
-                          setShowReportToast(true);
-                          setTimeout(() => setShowReportToast(false), 3000);
-                        }}
-                        className="flex items-center gap-2.5 w-full p-2.5 rounded-xl hover:bg-red-950/20 text-red-400 transition-colors cursor-pointer text-xs font-sans group"
+                        onClick={() => setAutoQuality(!autoQuality)}
+                        className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 outline-none focus:outline-none ${autoQuality ? 'bg-red-650' : 'bg-zinc-800'}`}
+                        style={{ outline: "none" }}
                       >
-                        <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round" />
-                          <line x1="4" y1="22" x2="4" y2="15" strokeLinecap="round" />
-                        </svg>
-                        <span>Report Video</span>
+                        <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ${autoQuality ? 'translate-x-[20px]' : 'translate-x-[2px]'}`} />
                       </button>
                     </div>
+
+                    {/* Option Group: Report Playback Issue */}
+                    <button
+                      onClick={() => {
+                        setShowSettingsPopup(false);
+                        setShowReportToast(true);
+                        setTimeout(() => setShowReportToast(false), 3000);
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-red-500/10 hover:text-red-300 transition-all text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-zinc-900 rounded-xl group-hover:bg-red-950/40 transition-colors">
+                          <Info className="w-4 h-4 text-zinc-300 group-hover:text-red-400" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-white group-hover:text-red-400">Report Playback Issue</span>
+                          <span className="text-[10px] text-zinc-500 font-medium font-sans">File logs and request video rebuild</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-red-450" />
+                    </button>
                   </div>
                 )}
 
-                {activePopupSection === 'speed' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 pb-1 border-b border-white/5">
-                      <button 
-                        onClick={() => setActivePopupSection('main')}
-                        className="text-[10px] text-zinc-550 hover:text-white font-mono font-semibold uppercase"
-                      >
-                        ◀ Back
-                      </button>
-                      <span className="text-[10px] text-zinc-400 font-mono tracking-widest uppercase">Select Speed</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5 pt-1">
-                      {[0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((rate) => (
-                        <button 
-                          key={rate}
-                          onClick={() => handleSpeedSelect(rate)}
-                          className={`p-2 rounded-xl text-xs font-mono font-semibold cursor-pointer ${playbackSpeed === rate ? 'bg-[#F97316] text-black' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}`}
-                        >
-                          {rate}x
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
+                {/* Subpanel: Quality Selection */}
                 {activePopupSection === 'quality' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 pb-1 border-b border-white/5">
+                  <div className="text-left space-y-1.5">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
                       <button 
                         onClick={() => setActivePopupSection('main')}
-                        className="text-[10px] text-zinc-550 hover:text-white font-mono font-semibold uppercase"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white p-1 rounded-lg"
                       >
-                        ◀ Back
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Back</span>
                       </button>
-                      <span className="text-[10px] text-zinc-400 font-mono tracking-widest uppercase">Select Quality</span>
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wider font-mono">Select Video Quality</span>
+                      <div className="w-[44px]" />
                     </div>
-                    <div className="space-y-1">
-                      {['1080p', '720p', '480p', '360p', 'Auto'].map((ql) => (
-                        <button 
+
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {['Auto', '1080p', '720p', '480p', '360p'].map((ql) => (
+                        <button
                           key={ql}
-                          onClick={() => handleQualitySelect(ql)}
-                          className={`flex items-center justify-between w-full p-2.5 rounded-xl cursor-pointer text-xs font-mono font-semibold ${quality === ql ? 'bg-orange-950/40 text-orange-400' : 'text-zinc-300 hover:bg-white/5'}`}
+                          onClick={() => {
+                            handleQualitySelect(ql);
+                            if (ql !== 'Auto') setAutoQuality(false);
+                            else setAutoQuality(true);
+                            setShowSettingsPopup(false);
+                          }}
+                          className={`py-3 px-4 rounded-xl text-center text-xs font-mono font-bold transition-all ${
+                            (ql === 'Auto' && autoQuality) || (quality === ql && !autoQuality)
+                              ? 'bg-red-650 text-white shadow-lg' 
+                              : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                          }`}
                         >
-                          <span>{ql}</span>
-                          {quality === ql && <span className="text-[8px] bg-orange-400/25 px-1.5 py-0.5 rounded text-orange-400">Active</span>}
+                          {ql === 'Auto' ? 'Auto (Recommended)' : ql}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Subpanel: Speed Selection */}
+                {activePopupSection === 'speed' && (
+                  <div className="text-left space-y-1.5">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">
+                      <button 
+                        onClick={() => setActivePopupSection('main')}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white p-1 rounded-lg"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Back</span>
+                      </button>
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wider font-mono">Playback Speed</span>
+                      <div className="w-[44px]" />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((rate) => (
+                        <button
+                          key={rate}
+                          onClick={() => {
+                            handleSpeedSelect(rate);
+                            setShowSettingsPopup(false);
+                          }}
+                          className={`py-3 px-2 rounded-xl text-center text-xs font-mono font-bold transition-all ${
+                            playbackSpeed === rate 
+                              ? 'bg-red-650 text-white shadow-lg' 
+                              : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                          }`}
+                        >
+                          {rate === 1.0 ? 'Normal' : `${rate}x`}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Simple floating action feedback */}
-          <AnimatePresence>
-            {showReportToast && (
-              <motion.div 
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 15 }}
-                className="absolute bottom-16 left-1/2 -translate-x-1/2 z-55 bg-red-950/85 border border-red-500/30 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-red-200 text-[10px] font-mono shadow-2xl"
-              >
-                <span>⚠️ Video reported for material deliverability. Flagged for review task check.</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        )}
+            </>
+          )}
+        </AnimatePresence>
 
         {/* Loading Spinner during ready wait state */}
         {!playerReady && (
@@ -1366,245 +1654,290 @@ export default function VideoPlayer({
               className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-sm"
               referrerPolicy="no-referrer"
             />
-            <div className="w-10 h-10 border-2 border-orange-500 border-t-transparent rounded-full animate-spin z-10" />
+            <div className="w-10 h-10 border-2 border-red-650 border-t-transparent rounded-full animate-spin z-10" />
             <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest z-10">Initializing Custom Stream Engine...</p>
           </div>
         )}
       </div>
 
-      {/* 4. PORTRAIT INFORMATION DETAILS PANEL LAYER SECTION (SCREENSHOT 2 LOOK) */}
+            {/* 4. PORTRAIT INFORMATION DETAILS PANEL LAYER SECTION (Refined 4-Row System) */}
       {!isFullscreenMode && (
-        <div className="w-full max-w-5xl mx-auto px-4 py-4 flex flex-col space-y-4 text-left">
+        <div className="w-full px-4 py-3 flex flex-col space-y-3.5 text-left border-t border-white/5 bg-[#000000]">
           
           {authWarning && (
-            <div className="p-3 bg-red-950/40 border border-red-500/35 text-red-200 text-xs rounded-xl font-mono text-center">
+            <div className="p-2.5 bg-red-950/25 border border-red-500/20 text-red-200 text-xs rounded-xl font-mono text-center">
               ⚠️ {authWarning}
             </div>
           )}
 
-          {/* CHANNEL SECTION LAYER WITH DYNAMIC ICON & RIGID HEIGHT TO PREVENT ANY ENLARGEMENT OR WRAPPING */}
-          <div className="flex items-center justify-between py-3 border-b border-neutral-900/40 bg-transparent h-16 w-full flex-nowrap">
-            {/* Left side: Channel logo & details */}
-            <div className="flex items-center gap-3 overflow-hidden min-w-0">
-              <div className="relative flex-shrink-0">
-                {/* Dynamically key-loaded authorized channel avatar */}
+          {/* ROW 1: Channel row (Avatar, Name, Subscribers count, Trust score, Follow button) */}
+          <div className="flex items-center justify-between gap-3 py-1.5 border-b border-white/5 pb-3">
+            <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+              <div className="relative shrink-0">
                 <img 
-                  src={channelInfo?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(lecture.teacherName || "Verified Educator")}&background=18181b&color=f97316&size=128&bold=true`} 
+                  src={channelInfo?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(lecture.teacherName || "Verified Educator")}&background=202024&color=ef4444&size=128&bold=true`} 
                   alt={channelInfo?.channelTitle || lecture.teacherName}
-                  className="w-11 h-11 rounded-full border border-white/10 object-cover shadow shadow-black"
+                  className="w-10 h-10 rounded-full object-cover border border-white/10"
                   referrerPolicy="no-referrer"
                 />
-                {/* Micro tick icon badge */}
-                <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#F97316] border border-black flex items-center justify-center shadow">
-                  <span className="text-[7.5px] text-black font-extrabold">✓</span>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border border-black flex items-center justify-center">
+                  <span className="text-[7.5px] text-black font-extrabold pb-0.5">✓</span>
                 </span>
               </div>
-              
-              <div className="text-left overflow-hidden leading-tight flex-1">
-                <h3 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
+              <div className="text-left min-w-0 leading-tight">
+                <h3 className="text-sm font-bold text-white truncate">
                   {channelInfo?.channelTitle || lecture.teacherName || "Verified Educator"}
                 </h3>
-                {/* Standard literal category aspect tag */}
-                <p className="text-[10px] text-zinc-400 font-mono tracking-wider font-semibold uppercase mt-0.5">
-                  {(lecture.subject || "Chemistry").toUpperCase()} • {(lecture.examType || "JEE").toUpperCase()}
-                </p>
-              </div>
-            </div>
-
-            {/* Right side: Fixed width follow trigger button - strictly size stable to preserve layouts */}
-            <div className="flex-shrink-0 pl-3">
-              <button 
-                onClick={handleFollowToggle}
-                className={`h-8 w-24 rounded-full text-xs font-sans font-extrabold cursor-pointer transition-all flex items-center justify-center ${
-                  isFollowed 
-                    ? 'bg-zinc-900 border border-neutral-800 text-zinc-400 hover:text-white' 
-                    : 'bg-white border-white text-black hover:bg-zinc-200 shadow shadow-white/5'
-                }`}
-              >
-                {isFollowed ? 'Following' : 'Follow'}
-              </button>
-            </div>
-          </div>
-
-          {/* ACTION NAVIGATION BUTTON PILLS ROW - COMPACT AND SECURE WITHOUT DUPLICATE SHARE BUTTONS */}
-          <div className="py-2 border-b border-neutral-900/40 overflow-x-auto scrollbar-none">
-            <div className="flex items-center gap-2.5 py-1 min-w-max">
-              
-              <button
-                onClick={handleLike}
-                className={`py-1.5 px-3.5 rounded-full border text-[11px] font-sans font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isLiked
-                    ? 'bg-[#F97316] text-black border-[#F97316]'
-                    : 'bg-[#1A1A1F] border-neutral-800 text-zinc-300 hover:text-white'
-                }`}
-              >
-                <ThumbsUp className="w-3.5 h-3.5" />
-                <span>Like</span>
-              </button>
-
-              <button
-                onClick={handleSave}
-                className={`py-1.5 px-3.5 rounded-full border text-[11px] font-sans font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isSaved
-                    ? 'bg-white text-black border-white'
-                    : 'bg-[#1A1A1F] border-neutral-800 text-zinc-300 hover:text-white'
-                }`}
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>Save</span>
-              </button>
-
-              <button
-                onClick={() => showWarning("Saved directly to your custom learning playlist.")}
-                className="py-1.5 px-3.5 rounded-full border border-neutral-800 bg-[#1A1A1F] text-[11px] font-sans font-medium text-zinc-300 hover:text-white flex items-center gap-1.5 cursor-pointer transition-all"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="8" y1="6" x2="21" y2="6" strokeLinecap="round" />
-                  <line x1="8" y1="12" x2="21" y2="12" strokeLinecap="round" />
-                  <line x1="8" y1="18" x2="21" y2="18" strokeLinecap="round" />
-                  <line x1="3" y1="6" x2="3.01" y2="6" strokeLinecap="round" />
-                  <line x1="3" y1="12" x2="3.01" y2="12" strokeLinecap="round" />
-                  <line x1="3" y1="18" x2="3.01" y2="18" strokeLinecap="round" />
-                </svg>
-                <span>Add to playlist</span>
-              </button>
-
-              <button
-                onClick={() => showWarning("Lesson added to Watch Later center.")}
-                className="py-1.5 px-3.5 rounded-full border border-neutral-800 bg-[#1A1A1F] text-[11px] font-sans font-medium text-zinc-300 hover:text-white flex items-center gap-1.5 cursor-pointer transition-all"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Watch later</span>
-              </button>
-            </div>
-          </div>
-
-          {/* LOWER SECTION: SUBJECT CATEGORY, EXPANDABLE DESCRIPTION INFO */}
-          <div className="space-y-2.5 pt-1.5 text-left">
-            
-            <span className="text-[10px] font-sans font-bold text-zinc-400 tracking-wider">
-              {(lecture.subject || "Chemistry").toUpperCase()}
-            </span>
-
-            <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight leading-tight select-text">
-              {lecture.title || "Periodic Table and Chemistry Periodicity One-Shot"}
-            </h2>
-
-            {/* Rating Stars Values */}
-            <div className="flex items-center justify-between py-1 bg-zinc-950/20 rounded-xl">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-sans font-extrabold text-white">4.9</span>
-                <div className="flex text-amber-400 gap-0.5">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} className="w-3.5 h-3.5 fill-current text-yellow-400" />
-                  ))}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-[10.5px] text-zinc-400 font-medium">
+                    {subscriberCountFormatted || "2.15M"} subscribers
+                  </p>
                 </div>
-                <span className="text-xs text-zinc-455 font-normal tracking-tight">({localReviews.length > 0 ? localReviews.length + 18700 : '18.7K'})</span>
               </div>
-              
-              <button 
-                onClick={() => {
-                  if (!user) {
-                    showWarning("Please authenticate to write a review check.");
-                  } else {
-                    setShowAddReviewModal(true);
-                  }
-                }}
-                className="text-xs font-sans font-bold text-zinc-300 hover:text-white flex items-center gap-0.5"
-              >
-                <span>Add review</span>
-                <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
-              </button>
             </div>
 
-            {/* Expandable Overview Box */}
-            <div className="text-left font-sans leading-relaxed">
-              <p className={`text-xs text-zinc-350 ${!isDescExpanded ? 'line-clamp-2' : ''} whitespace-pre-line`}>
-                {lecture.description || "Comprehensive block elements ionization behaviors, periodic coordination properties, syllabus coverage for JEE candidates."}
-              </p>
-              <button
-                onClick={() => setIsDescExpanded(!isDescExpanded)}
-                className="text-orange-500 hover:underline font-bold text-xs mt-1.5 block cursor-pointer transition-colors"
-              >
-                {isDescExpanded ? 'See Less' : 'See more....'}
-              </button>
+            {/* Accent 2 (Trust Score Circular Graph) moved to Row 1 center/right of center */}
+            <div className="flex flex-col items-center shrink-0 select-none mr-1.5">
+              <div className="relative w-9 h-9 flex items-center justify-center">
+                <svg className="w-9 h-9 transform -rotate-90" viewBox="0 0 36 36">
+                  {/* Background track: White */}
+                  <circle 
+                    cx="18" 
+                    cy="18" 
+                    r="15" 
+                    fill="none" 
+                    stroke="#FFFFFF" 
+                    strokeWidth="3.2" 
+                    strokeOpacity="0.1"
+                  />
+                  {/* Fill: Green */}
+                  <circle 
+                    cx="18" 
+                    cy="18" 
+                    r="15" 
+                    fill="none" 
+                    stroke="#22C55E" 
+                    strokeWidth="3.2" 
+                    strokeDasharray="94.2" 
+                    strokeDashoffset={94.2 - (94.2 * (averageRating ? Number(averageRating) * 20 : 92)) / 100}
+                    strokeLinecap="round"
+                    className="transition-all duration-500 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-[9px] font-mono font-extrabold text-[#FFFFFF] leading-none">
+                    {Math.round(averageRating ? Number(averageRating) * 20 : 92)}%
+                  </span>
+                </div>
+                {/* Tiny green check badge overlay */}
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border border-black flex items-center justify-center shadow">
+                  <span className="text-[7.5px] text-black font-extrabold pb-0.5 font-sans">✓</span>
+                </div>
+              </div>
+              <span className="text-[7px] font-extrabold text-zinc-500 font-mono uppercase tracking-wider mt-0.5">Trust Score</span>
+            </div>
+
+            <button 
+              onClick={handleFollowToggle}
+              className={`h-8 px-5 rounded-full text-xs font-bold cursor-pointer transition-all flex items-center justify-center shrink-0 ${
+                isFollowed 
+                  ? 'bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white' 
+                  : 'bg-white text-black hover:bg-zinc-200 shadow'
+              }`}
+            >
+              {isFollowed ? 'Following' : 'Follow'}
+            </button>
+          </div>
+
+          {/* ROW 2: Tightly spaced horizontal row of outlined action buttons */}
+          <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none select-none no-scrollbar border-b border-white/5 pb-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {/* Like Button */}
+            <button
+              onClick={handleLike}
+              className={`h-7.5 px-4 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                isLiked
+                  ? 'bg-white text-black border-white shadow'
+                  : 'bg-white/[0.04] border-white/10 text-white hover:bg-white/[0.08] hover:border-white/20'
+              }`}
+            >
+              <ThumbsUp className="w-3.5 h-3.5" />
+              <span>{isLiked ? 'Liked' : 'Like'}</span>
+            </button>
+
+            {/* Save Button */}
+            <button
+              onClick={handleSave}
+              className={`h-7.5 px-4 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                isSaved
+                  ? 'bg-white text-black border-white shadow'
+                  : 'bg-white/[0.04] border-white/10 text-white hover:bg-white/[0.08] hover:border-white/20'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>{isSaved ? 'Saved to Board' : 'Save'}</span>
+            </button>
+
+            {/* Watch Later / Add to Playlist Queue Button */}
+            <button
+              onClick={handleWatchLaterToggle}
+              className={`h-7.5 px-4 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                isWatchLater
+                  ? 'bg-white text-black border-white shadow'
+                  : 'bg-white/[0.04] border-white/10 text-white hover:bg-white/[0.08] hover:border-white/20'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>{isWatchLater ? 'In Queue' : 'Watch Later'}</span>
+            </button>
+
+            {/* Share Button with status feedback */}
+            <button
+              onClick={handleShare}
+              className={`h-7.5 px-4 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                copiedLink
+                  ? 'bg-[#22C55E] text-white border-[#22C55E]'
+                  : 'bg-white/[0.04] border-white/10 text-white hover:bg-white/[0.08] hover:border-white/20'
+              }`}
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>{copiedLink ? 'Copied' : 'Share'}</span>
+            </button>
+
+            {/* Add Review Action */}
+            <button
+              onClick={() => {
+                if (!user) {
+                  showWarning("Please authenticate to write a review.");
+                } else {
+                  setShowAddReviewModal(true);
+                }
+              }}
+              className="h-7.5 px-4 rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-semibold text-white hover:bg-white/[0.08] hover:border-white/20 flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+            >
+              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span>Add Review</span>
+            </button>
+          </div>
+
+          {/* ROW 3: Category tag, Video Title, Rating Row */}
+          <div className="flex flex-col gap-1.5 py-1 text-left">
+            <span className="text-[10px] font-bold text-[#FF0000] tracking-wider uppercase">
+              {(lecture.subject || "Chemistry")} • {(lecture.examType || "JEE")}
+            </span>
+            <h1 className="text-base sm:text-lg font-bold text-white leading-snug tracking-tight select-text">
+              {lecture.title || "Periodic Table and Chemistry Periodicity One-Shot"}
+            </h1>
+            
+            <div 
+              onClick={() => {
+                setShowFullScreenReviews(true);
+              }}
+              className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white transition-all cursor-pointer w-fit mt-1.5 bg-zinc-900/40 border border-white/5 py-1.5 px-3.5 rounded-full hover:bg-zinc-900/80 active:scale-95"
+            >
+              <span className="font-extrabold text-white text-xs">{averageRating || "4.8"}</span>
+              <div className="flex text-amber-500 gap-0.5 ml-0.5">
+                <Star className="w-3 h-3 fill-current" />
+                <Star className="w-3 h-3 fill-current" />
+                <Star className="w-3 h-3 fill-current" />
+                <Star className="w-3 h-3 fill-current" />
+                <Star className="w-3 h-3 fill-current animate-none" />
+              </div>
+              <span className="text-zinc-400 font-bold text-[10.5px] ml-1">
+                ({localReviews.length ? `${localReviews.length} Student Reviews` : "18.7K Ratings"})
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-500 stroke-[2.5]" />
             </div>
           </div>
 
-          {/* ACTIVE STUDENT VERIFIED REVIEWS */}
-          <div className="space-y-3 pt-3">
-            <h3 className="text-[10px] font-sans font-bold text-zinc-400 tracking-wider uppercase">
-              Student Reviews ({localReviews.length})
-            </h3>
-            {localReviews.length > 0 && (
-              <div className="space-y-2">
-                {localReviews.slice(0, 3).map((rev) => (
-                  <div key={rev.id} className="p-3.5 bg-[#0C0C0D] border border-neutral-900 rounded-2xl text-left text-xs text-zinc-300">
-                    <div className="flex justify-between items-center mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white">{rev.userDisplayName}</span>
-                        <span className="text-[8px] bg-orange-950/40 text-orange-400 px-1.5 rounded border border-orange-900/35 font-mono">Verified Student</span>
-                      </div>
-                      <div className="flex text-yellow-400 text-[10px] gap-0.2">
-                        {Array.from({ length: rev.rating }).map((_, i) => (
-                          <Star key={i} className="w-3 h-3 fill-current" />
-                        ))}
-                      </div>
-                    </div>
-                    <p className="font-mono text-zinc-350">{rev.comment}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* ROW 4: Expandable Description Card with smooth motion layout */}
+          <motion.div
+            layout
+            initial={{ height: "auto" }}
+            className="py-3.5 px-4 rounded-2xl bg-zinc-900/30 border border-white/5 text-left cursor-pointer transition-all hover:bg-zinc-900/60 mt-2 mb-3 select-none"
+            onClick={() => setIsDescExpanded(!isDescExpanded)}
+          >
+            <motion.p 
+              layout
+              className={`text-xs text-zinc-350 leading-relaxed whitespace-pre-line ${!isDescExpanded ? 'line-clamp-2' : ''} font-sans`}
+            >
+              {lecture.description || "Complete periodicity in one shot with concepts, trends, exceptions and important JEE questions."}
+            </motion.p>
+            <div className="flex items-center gap-1 mt-2 text-[10px] font-bold text-red-500 hover:text-red-400 transition-colors">
+              <span>{isDescExpanded ? 'Show Less' : 'More'}</span>
+              <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${isDescExpanded ? 'rotate-90' : ''}`} />
+            </div>
+          </motion.div>
           </div>
+        )}
 
-          {/* 5. RECOMMENDED RECENT Grid matching Screenshot 2 */}
-          {nextUpLessons.length > 0 && (
-            <div className="space-y-3.5 pt-3 border-t border-neutral-900/70">
-              <h3 className="text-[10px] font-sans font-bold tracking-widest text-zinc-400 uppercase">
-                RECOMMENDED LESSONS ({nextUpLessons.length})
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {nextUpLessons.map((lec) => (
-                  <div
-                    key={lec.id}
-                    onClick={() => onSelectLecture && onSelectLecture(lec)}
-                    className="p-3 bg-[#0F0F10] border border-[#1A1A1F] hover:bg-[#141416] rounded-2xl flex gap-3 text-left transition-all cursor-pointer group hover:border-orange-500/25"
-                  >
-                    <div className="relative w-24 h-14 bg-black overflow-hidden rounded-xl flex-shrink-0 border border-zinc-900 shadow">
-                      <img
-                        src={getLectureThumbnail(lec)}
-                        alt={lec.title}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        referrerPolicy="no-referrer"
-                      />
-                      <span className="absolute bottom-1 right-1 bg-black/80 px-1 font-mono text-[8px] text-white rounded">
-                        {lec.duration || "2:15:28"}
-                      </span>
-                    </div>
-                    
-                    <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      <div>
-                        <h4 className="text-xs font-bold text-zinc-200 truncate group-hover:text-orange-400 transition-colors">
-                          {lec.title}
-                        </h4>
-                        <span className="text-[10px] text-zinc-450 font-mono mt-0.5 block truncate">
-                          By {lec.teacherName}
-                        </span>
+      </div>
+
+          {/* Right Column: Dynamic Lesson Recommendation Sidebar (stretches full width below player) */}
+          {!isFullscreenMode && nextUpLessons && nextUpLessons.length > 0 && (
+            <div className="w-full space-y-4 px-4 lg:px-0">
+              <div className="bg-[#000000] border-t border-white/5 lg:border lg:border-neutral-900 rounded-3xl p-4 lg:p-5 space-y-4 text-left">
+                {/* Vertical scroller/viewer stretched to match the width boundary of the player */}
+                <div className="flex flex-col gap-3.5">
+                  {nextUpLessons.map((lec) => {
+                    const views = lec.viewsCount || Math.floor(Math.abs(lec.id.charCodeAt(0) * 12345) % 850000);
+                    const formattedViews = formatViewsCount(views);
+                    const timeAgo = getRelativeUploadTime(lec.publishDate || lec.createdAt);
+
+                    return (
+                      <div
+                        key={lec.id}
+                        onClick={() => {
+                          if (onSelectLecture) onSelectLecture(lec);
+                        }}
+                        className="p-3 bg-zinc-950/20 border border-white/[0.03] hover:bg-zinc-900/40 hover:border-white/10 rounded-2xl flex gap-3.5 text-left transition-all cursor-pointer group shrink-0 relative"
+                      >
+                        {/* Video Thumbnail area with duration badge */}
+                        <div className="relative w-[130px] xs:w-[140px] aspect-video bg-black overflow-hidden rounded-xl flex-shrink-0 border border-white/5 shadow-md">
+                          <SafeImage
+                            src={getLectureThumbnail(lec)}
+                            alt={lec.title}
+                            className="w-full h-full"
+                            imageClassName="transition-transform duration-300 group-hover:scale-105"
+                            variant="thumbnail"
+                          />
+                          
+                          {/* Centered Play Button overlay loop */}
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/45 transition-colors" />
+                          <div className="absolute inset-0 m-auto w-7 h-7 bg-black/60 backdrop-blur rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-200">
+                            <Play className="w-3 h-3 fill-current text-white ml-0.5" />
+                          </div>
+
+                          <span className="absolute bottom-1 right-1.5 bg-black/90 px-1.5 py-0.5 font-mono text-[9px] font-bold text-zinc-100 rounded">
+                            {lec.duration || "2:15:28"}
+                          </span>
+                        </div>
+                        
+                        {/* Right Text details column */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center text-left">
+                          <div className="min-w-0">
+                            <h4 className="text-xs sm:text-[13px] font-bold text-zinc-100 leading-snug line-clamp-2 group-hover:text-red-500 transition-colors select-text">
+                              {lec.title}
+                            </h4>
+                            
+                            <span className="text-[10.5px] text-zinc-400 font-bold block mt-1 hover:text-white transition-colors">
+                              {lec.teacherName || "Verified Educator"}
+                            </span>
+
+                            <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                              {formattedViews} • {timeAgo}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      
-                      <span className="text-[9px] text-zinc-550 font-mono uppercase tracking-tight">
-                        {lec.subject} • {lec.examType || 'JEE'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
 
         </div>
-      )}
+      </div>
 
       {/* RATING MODAL WINDOWS */}
       <AnimatePresence>
@@ -1628,7 +1961,7 @@ export default function VideoPlayer({
                 <h3 className="text-base font-bold text-white uppercase tracking-wide font-mono">Submit Verification Review</h3>
               </div>
               <p className="text-xs text-zinc-400 mb-4 font-sans leading-relaxed">
-                Add your rating to update real-time statistics of <span className="text-orange-400 font-bold">{lecture.teacherName}</span>. Your rating will modify trust aggregations immediately.
+                Add your rating to update real-time statistics of <span className="text-red-500 font-bold">{lecture.teacherName}</span>. Your rating will modify trust aggregations immediately.
               </p>
 
               <form onSubmit={handleReviewSubmitAction} className="space-y-4">
@@ -1655,13 +1988,13 @@ export default function VideoPlayer({
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
                     placeholder="Describe your verification check. (E.g. Clear concepts, covers complete topics...)"
-                    className="w-full bg-[#0A0A0B] border border-zinc-800 rounded-xl p-3 text-xs text-zinc-200 outline-none focus:border-orange-500 font-sans placeholder-zinc-650 transition-colors resize-none animate-none"
+                    className="w-full bg-[#0A0A0B] border border-zinc-800 rounded-xl p-3 text-xs text-zinc-200 outline-none focus:border-red-500 font-sans placeholder-zinc-650 transition-colors resize-none animate-none"
                   />
                 </div>
 
-                <div className="flex items-center gap-2.5 p-3 bg-orange-950/20 border border-orange-950/15 rounded-xl">
-                  <FileCheck2 className="w-4 h-4 text-orange-400 flex-shrink-0" />
-                  <span className="text-[9px] font-mono text-orange-400 leading-normal">
+                <div className="flex items-center gap-2.5 p-3 bg-red-950/20 border border-red-950/15 rounded-xl">
+                  <FileCheck2 className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span className="text-[9px] font-mono text-red-500 leading-normal">
                     This account is registered as a verified student participant. Your feedback is highly weighted in the algorithm of our trust score calculations.
                   </span>
                 </div>
@@ -1669,7 +2002,7 @@ export default function VideoPlayer({
                 <button
                   type="submit"
                   disabled={reviewSubmitting}
-                  className="w-full py-2.5 bg-[#F97316] text-black font-bold font-mono text-xs uppercase rounded-xl hover:bg-orange-400 transition-colors cursor-pointer disabled:opacity-50 text-center flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 bg-red-650 text-white font-bold font-mono text-xs uppercase rounded-xl hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50 text-center flex items-center justify-center gap-1.5"
                 >
                   {reviewSubmitting ? (
                     <>
@@ -1686,6 +2019,259 @@ export default function VideoPlayer({
         )}
       </AnimatePresence>
 
+      {/* FLOATABLE REPORT SUCCESS TOAST NOTIFICATE */}
+      <AnimatePresence>
+        {showReportToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-55 bg-zinc-950 border border-white/10 p-4 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md max-w-sm w-[90%]"
+          >
+            <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
+              <CheckCircle className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-bold text-white font-sans">Issue Reported Successfully</span>
+              <span className="text-[10px] text-zinc-400 font-sans">Technical details & network logs synced</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* DEDICATED FULL-SCREEN REVIEWS OVERLAY SECTION */}
+      <AnimatePresence>
+        {showFullScreenReviews && (
+          <motion.div
+            initial={{ opacity: 0, x: "100%" }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 250 }}
+            className="fixed inset-0 bg-black z-50 flex flex-col overflow-hidden text-zinc-100 font-sans"
+          >
+            {/* Reviews Header bar */}
+            <div className="flex items-center gap-3 px-4 py-4 border-b border-white/5 bg-zinc-950/80 backdrop-blur shrink-0">
+              <button
+                onClick={() => setShowFullScreenReviews(false)}
+                className="p-1.5 hover:bg-white/10 rounded-full text-white transition-all active:scale-90"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="text-left">
+                <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Course Verification Reviews</h2>
+                <p className="text-[10px] text-zinc-400">Student feedback and trust certificates for {lecture.teacherName || "Verified Educator"}</p>
+              </div>
+            </div>
+
+            {/* Scrollable board content */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+              
+              {/* Aggregation statistics widget */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-zinc-950/40 border border-white/5 p-5 rounded-3xl">
+                
+                {/* Visual stars summary */}
+                <div className="flex flex-col items-center justify-center p-3 border-b md:border-b-0 md:border-r border-white/5 text-center">
+                  <span className="text-4xl font-extrabold text-white font-sans">{averageRating || "4.8"}</span>
+                  <div className="flex text-amber-500 gap-0.5 my-2">
+                    <Star className="w-4 h-4 fill-current" />
+                    <Star className="w-4 h-4 fill-current" />
+                    <Star className="w-4 h-4 fill-current" />
+                    <Star className="w-4 h-4 fill-current" />
+                    <Star className="w-4 h-4 fill-current animate-none" />
+                  </div>
+                  <span className="text-[11px] font-medium text-zinc-400">
+                    Based on {localReviews.length ? `${localReviews.length} Student Reviews` : "18.7K Ratings"}
+                  </span>
+                </div>
+
+                {/* Circular Trust score graph wrapper */}
+                <div className="flex flex-col items-center justify-center p-3 border-b md:border-b-0 md:border-r border-white/5 text-center select-none">
+                  <div className="relative w-16 h-16 flex items-center justify-center">
+                    <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeOpacity="0.08" />
+                      <circle 
+                        cx="18" 
+                        cy="18" 
+                        r="15" 
+                        fill="none" 
+                        stroke="#22C55E" 
+                        strokeWidth="2.5" 
+                        strokeDasharray="94.2" 
+                        strokeDashoffset={94.2 - (94.2 * (averageRating ? Number(averageRating) * 20 : 92)) / 100}
+                        strokeLinecap="round"
+                        className="transition-all duration-500"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-xs font-mono font-bold text-white">
+                        {Math.round(averageRating ? Number(averageRating) * 20 : 92)}%
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-white mt-2">Verified Trust Score</span>
+                  <span className="text-[10px] text-zinc-400 mt-0.5 font-sans">Index based on verified student status</span>
+                </div>
+
+                {/* Distribution breakout bars */}
+                <div className="flex flex-col justify-center p-3 space-y-1.5">
+                  {[5, 4, 3, 2, 1].map((stars) => {
+                    const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+                    localReviews.forEach(r => {
+                      const star = Math.max(1, Math.min(5, Math.floor(r.rating || 5)));
+                      counts[star as 5 | 4 | 3 | 2 | 1]++;
+                    });
+                    const total = localReviews.length || 1;
+                    const pct = localReviews.length 
+                      ? Math.round((counts[stars as 5|4|3|2|1] / total) * 100) 
+                      : (stars === 5 ? 75 : stars === 4 ? 15 : stars === 3 ? 6 : stars === 2 ? 3 : 1);
+
+                    return (
+                      <div key={stars} className="flex items-center gap-2 text-[11px]">
+                        <span className="w-3 text-right font-semibold text-zinc-400">{stars}</span>
+                        <Star className="w-3 h-3 text-zinc-500 fill-zinc-500 shrink-0" />
+                        <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-550 bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-6 text-left font-mono text-zinc-400">{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+
+              {/* Action trigger & Sorters category line */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">Sort reviews:</span>
+                  <div className="flex gap-1 bg-zinc-950 p-1 rounded-xl border border-white/15">
+                    {(['newest', 'highest', 'lowest'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setReviewSort(mode)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wide transition-all ${
+                          reviewSort === mode 
+                            ? 'bg-zinc-850 text-white shadow' 
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      showWarning("Please authenticate to submit your reviews.");
+                    } else {
+                      setShowAddReviewModal(true);
+                    }
+                  }}
+                  className="px-4.5 py-2.5 bg-red-650 hover:bg-red-600 transition-colors text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  <span>Write or Submit Review</span>
+                </button>
+              </div>
+
+              {/* Iterating scroll cards feed */}
+              <div className="space-y-3 pb-16 text-left">
+                {(() => {
+                  const sorted = [...localReviews];
+                  if (reviewSort === 'highest') {
+                    sorted.sort((a, b) => (b.rating || 5) - (a.rating || 5));
+                  } else if (reviewSort === 'lowest') {
+                    sorted.sort((a, b) => (a.rating || 5) - (b.rating || 5));
+                  } else {
+                    sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+                  }
+
+                  if (sorted.length > 0) {
+                    return sorted.map((rev) => (
+                      <div 
+                        key={rev.id} 
+                        className="p-4 bg-zinc-950/25 border border-white/5 rounded-2xl flex flex-col gap-2 transition-all hover:border-white/10"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex flex-col leading-tight text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white text-xs">{rev.userDisplayName}</span>
+                              <span className="text-[8px] bg-red-950/30 text-red-450 px-1.5 rounded border border-red-900/40 font-mono uppercase tracking-widest leading-none py-0.5">
+                                Verified Student
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-zinc-500 font-medium font-mono mt-1">
+                              {getRelativeUploadTime(rev.createdAt)}
+                            </span>
+                          </div>
+
+                          <div className="flex gap-0.5 text-amber-500">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star 
+                                key={i} 
+                                className={`w-3 h-3 ${i < (rev.rating || 5) ? 'fill-current text-amber-550' : 'text-zinc-800'}`} 
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-zinc-300 leading-relaxed font-sans mt-0.5 whitespace-pre-wrap">
+                          {rev.comment}
+                        </p>
+                      </div>
+                    ));
+                  }
+
+                  return (
+                    <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
+                      <div className="w-12 h-12 rounded-full bg-zinc-900/60 flex items-center justify-center text-zinc-500 border border-white/5 shadow">
+                        <Star className="w-5 h-5 stroke-[1.5]" />
+                      </div>
+                      <h3 className="text-sm font-bold text-white">No Reviews Posted Yet</h3>
+                      <p className="text-xs text-zinc-500 max-w-xs font-sans">Be the first verified student to rate this lecture and help track educator reliability statistics.</p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
+
+// STYLISH CUSTOM DATA HELPER UTILITY FUNCTIONS outside component
+const formatViewsCount = (count?: number) => {
+  if (!count) return "12.4K views";
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M views`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K views`;
+  }
+  return `${count} views`;
+};
+
+const getRelativeUploadTime = (dateStr?: string) => {
+  if (!dateStr) return "3 months ago";
+  try {
+    const p = Date.parse(dateStr);
+    if (isNaN(p)) return "2 months ago";
+    const diffMs = Date.now() - p;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 30) return `${diffDays} days ago`;
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+    const diffYears = Math.floor(diffMonths / 12);
+    return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+  } catch(e) {
+    return "3 months ago";
+  }
+};

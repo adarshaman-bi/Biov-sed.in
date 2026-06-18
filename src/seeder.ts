@@ -1,6 +1,6 @@
 import { doc, getDocs, collection, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch, TrustScoreBreakdown } from './types';
+import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch, EntityTrustScoreBreakdown as TrustScoreBreakdown } from './types';
 
 export async function seedInitialDatabase() {
   try {

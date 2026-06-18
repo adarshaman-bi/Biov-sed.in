@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
   fetchModerationReports,
@@ -18,10 +18,21 @@ import {
   deleteReview,
   fetchLectures,
   updateLectureVerification,
-  isStrategyOrHypeContent
+  isStrategyOrHypeContent,
+  fetchAllChannels,
+  saveChannel,
+  deleteChannel,
+  fetchPlaylistsForAdmin,
+  savePlaylistAdmin,
+  fetchAllVideos,
+  saveVideo,
+  saveVideosBatch,
+  fetchAllYouTubeSyncLogs,
+  saveYouTubeSyncLog
 } from '../services/dbService';
-import { ModerationReport, TeacherProfile, InstituteProfile, Playlist, Lecture, IngestionLog, IngestionControl, Review } from '../types';
+import { ModerationReport, TeacherProfile, InstituteProfile, Playlist, Lecture, IngestionLog, IngestionControl, Review, YouTubeChannel, YouTubeVideo, YouTubeSyncLog } from '../types';
 import { getPlaylistThumbnail } from '../services/thumbnailHelper';
+import { runIntegrationTests } from '../services/cdnVerifyScript';
 import {
   ShieldAlert,
   Check,
@@ -47,14 +58,43 @@ import {
   CheckCircle,
   Activity,
   BookOpen,
-  Play
+  Play,
+  Trash2,
+  History,
+  Layers
 } from 'lucide-react';
+
+import YouTubeImporterTab from './YouTubeImporterTab';
+import ContentManagerTab from './ContentManagerTab';
 
 export default function ModeratorDashboard() {
   const { user } = useAuth();
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'reports' | 'youtube' | 'verification' | 'lectures'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'youtube' | 'verification' | 'lectures' | 'content_manager' | 'cdn_cache'>('reports');
+
+  // CDN cache test console states
+  const [cdnTestLogs, setCdnTestLogs] = useState<string[]>([]);
+  const [cdnTestSuccess, setCdnTestSuccess] = useState<boolean | null>(null);
+  const [cdnTestingRunning, setCdnTestingRunning] = useState<boolean>(false);
+
+  const handleTriggerCdnVerification = async () => {
+    setCdnTestingRunning(true);
+    setCdnTestSuccess(null);
+    setCdnTestLogs(["[CLI] Initializing Edge CDN integration test runner...", "[CLI] Matching framework configuration set to Jest/TypeScript environment."]);
+    await delayHelper(800);
+    
+    try {
+      const result = await runIntegrationTests();
+      setCdnTestLogs(result.logs);
+      setCdnTestSuccess(result.success);
+    } catch (e: any) {
+      setCdnTestLogs(prev => [...prev, `[CRITICAL ERROR] ${e.message || String(e)}`]);
+      setCdnTestSuccess(false);
+    } finally {
+      setCdnTestingRunning(false);
+    }
+  };
 
   // Lectures tab states
   const [lecturesForApproval, setLecturesForApproval] = useState<Lecture[]>([]);
@@ -123,6 +163,35 @@ export default function ModeratorDashboard() {
   const [channelsProcessedCount, setChannelsProcessedCount] = useState<number>(0);
   const [playlistsProcessedCount, setPlaylistsProcessedCount] = useState<number>(0);
   const [lecturesProcessedCount, setLecturesProcessedCount] = useState<number>(0);
+
+  // Nested YouTube importer system tabs
+  const [youtubeSubTab, setYoutubeSubTab] = useState<'console' | 'channels' | 'playlists' | 'videos' | 'audit'>('console');
+  
+  // Channels Management States
+  const [adminChannels, setAdminChannels] = useState<YouTubeChannel[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [newChannelHandleId, setNewChannelHandleId] = useState('');
+  const [newChannelTags, setNewChannelTags] = useState('NEET, Biology');
+  const [newChannelSubject, setNewChannelSubject] = useState('Biology');
+  const [addingChannel, setAddingChannel] = useState(false);
+  
+  // Playlists crawler States
+  const [adminPlaylists, setAdminPlaylists] = useState<Playlist[]>([]);
+  const [adminPlaylistsLoading, setAdminPlaylistsLoading] = useState(false);
+  const [playlistChannelFilter, setPlaylistChannelFilter] = useState('all');
+  const [playlistStatusFilter, setPlaylistStatusFilter] = useState('all');
+  const [importingPlaylistId, setImportingPlaylistId] = useState<string | null>(null);
+
+  // Videos catalog States
+  const [adminVideos, setAdminVideos] = useState<YouTubeVideo[]>([]);
+  const [adminVideosLoading, setAdminVideosLoading] = useState(false);
+  const [videoPlaylistFilter, setVideoPlaylistFilter] = useState('all');
+  const [videoSubjectFilter, setVideoSubjectFilter] = useState('all');
+  const [activePlayVideoId, setActivePlayVideoId] = useState<string | null>(null);
+
+  // Sync audit logs States
+  const [adminSyncLogs, setAdminSyncLogs] = useState<YouTubeSyncLog[]>([]);
+  const [adminSyncLogsLoading, setAdminSyncLogsLoading] = useState(false);
 
   const [recalibratingId, setRecalibratingId] = useState<string | null>(null);
   const [recalibrateState, setRecibrateState] = useState<string | null>(null);
@@ -315,26 +384,184 @@ export default function ModeratorDashboard() {
     loadReports();
   };
 
-  // YouTube logic: Load configured manually-verified coaching channels
-  useEffect(() => {
-    async function loadChannels() {
-      try {
-        const res = await fetch('/api/youtube/channels');
-        if (res.ok) {
-          const payload = await res.json();
-          setChannels(payload.data || []);
-          if (payload.data && payload.data.length > 0) {
-            setSelectedChannelId(payload.data[0].id);
-          }
+  // YouTube logic: Load configured manually-verified coaching channels & admin system sub-collections
+  const refreshAdminChannels = async () => {
+    setChannelsLoading(true);
+    try {
+      const res = await fetch('/api/youtube/admin-channels');
+      if (res.ok) {
+        const payload = await res.json();
+        setAdminChannels(payload.data || []);
+        setChannels(payload.data || []);
+        if (payload.data && payload.data.length > 0 && !selectedChannelId) {
+          setSelectedChannelId(payload.data[0].id);
         }
-      } catch (err) {
-        console.error('Failed to retrieve verified channels config', err);
       }
+    } catch (err) {
+      console.error('Failed to load admin channels', err);
+    } finally {
+      setChannelsLoading(false);
     }
+  };
+
+  const refreshAdminPlaylists = async () => {
+    setAdminPlaylistsLoading(true);
+    try {
+      const res = await fetch('/api/youtube/admin-playlists');
+      if (res.ok) {
+        const payload = await res.json();
+        setAdminPlaylists(payload.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load admin playlists', err);
+    } finally {
+      setAdminPlaylistsLoading(false);
+    }
+  };
+
+  const refreshAdminVideos = async () => {
+    setAdminVideosLoading(true);
+    try {
+      const res = await fetch('/api/youtube/admin-videos');
+      if (res.ok) {
+        const payload = await res.json();
+        setAdminVideos(payload.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load admin videos', err);
+    } finally {
+      setAdminVideosLoading(false);
+    }
+  };
+
+  const refreshAdminSyncLogs = async () => {
+    setAdminSyncLogsLoading(true);
+    try {
+      const res = await fetch('/api/youtube/admin-logs');
+      if (res.ok) {
+        const payload = await res.json();
+        setAdminSyncLogs(payload.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load admin sync logs', err);
+    } finally {
+      setAdminSyncLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (activeTab === 'youtube') {
-      loadChannels();
+      refreshAdminChannels();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'youtube') {
+      if (youtubeSubTab === 'console') {
+        refreshAdminChannels();
+      }
+      if (youtubeSubTab === 'channels') {
+        refreshAdminChannels();
+      }
+      if (youtubeSubTab === 'playlists') {
+        refreshAdminChannels();
+        refreshAdminPlaylists();
+      }
+      if (youtubeSubTab === 'videos') {
+        refreshAdminVideos();
+      }
+      if (youtubeSubTab === 'audit') {
+        refreshAdminSyncLogs();
+      }
+    }
+  }, [youtubeSubTab, activeTab]);
+
+  // Actions for custom YouTube operations
+  const handleAddChannel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChannelHandleId.trim()) return;
+    setAddingChannel(true);
+    addTerminalLog(`Handshaking adding channel: ${newChannelHandleId}...`, 'info');
+    try {
+      const res = await fetch('/api/youtube/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handleOrId: newChannelHandleId.trim(),
+          examTags: newChannelTags.split(',').map(s => s.trim()),
+          subject: newChannelSubject
+        })
+      });
+      if (res.ok) {
+        setNewChannelHandleId('');
+        addTerminalLog(`Successfully registered channel: ${newChannelHandleId}`, 'success');
+        await refreshAdminChannels();
+      } else {
+        const payload = await res.json();
+        addTerminalLog(`Failed to register channel: ${payload.error || 'Server error'}`, 'error');
+      }
+    } catch (err: any) {
+      addTerminalLog(`Failed to add channel: ${err.message}`, 'error');
+    } finally {
+      setAddingChannel(false);
+    }
+  };
+
+  const handleDeleteChannelClick = async (channelId: string) => {
+    if (!window.confirm("Are you sure you want to remove this channel from the local indexing system?")) return;
+    try {
+      await deleteChannel(channelId);
+      addTerminalLog(`Successfully removed channel doc from active catalog: ${channelId}`, 'success');
+      await refreshAdminChannels();
+    } catch (err: any) {
+      addTerminalLog(`Error deleting channel: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSyncChannelPlaylistsClick = async (channelId: string) => {
+    try {
+      addTerminalLog(`Syncing playlists index for channel: ${channelId}...`, 'info');
+      const res = await fetch('/api/youtube/playlists/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId })
+      });
+      if (res.ok) {
+        addTerminalLog(`Playlists successfully synchronised into index cache.`, 'success');
+        await refreshAdminPlaylists();
+      } else {
+        const payload = await res.json();
+        addTerminalLog(`Handshake failed: ${payload.error}`, 'error');
+      }
+    } catch (err: any) {
+      addTerminalLog(`Error synchronising: ${err.message}`, 'error');
+    }
+  };
+
+  const handleImportPlaylistClick = async (playlistId: string) => {
+    setImportingPlaylistId(playlistId);
+    addTerminalLog(`Initiating full batch lectures ingestion for playlist: ${playlistId} ...`, 'info');
+    try {
+      const res = await fetch('/api/youtube/playlists/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playlistId })
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        addTerminalLog(`Successfully imported ${payload.count} videos into 'videos' & 'lectures' collections!`, 'success');
+        await refreshAdminPlaylists();
+        await refreshAdminSyncLogs();
+      } else {
+        const payload = await res.json();
+        addTerminalLog(`Ingestion failed: ${payload.error || 'Server error'}`, 'error');
+      }
+    } catch (err: any) {
+      addTerminalLog(`Error ingesting playlist: ${err.message}`, 'error');
+    } finally {
+      setImportingPlaylistId(null);
+    }
+  };
 
   // YouTube logic: Trigger pipeline to fetch playlists
   const handleFetchPlaylists = async () => {
@@ -1276,59 +1503,56 @@ export default function ModeratorDashboard() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 md:py-10 space-y-6 text-left font-sans">
+    <div className="w-full space-y-8 text-left font-sans animate-fade-in">
       
       {/* Console title block */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/30">
-            <ShieldAlert className="w-6 h-6 text-orange-500" />
-          </div>
-          <div>
-            <h2 className="text-xl font-display font-medium text-brand-accent tracking-tight">
-              Biovised Academic Moderation Queue
-            </h2>
-            <p className="text-xs text-brand-gray font-mono">
-              Administrative credentials active: {user.displayName} ({user.role})
-            </p>
-          </div>
+      <div className="flex flex-col gap-6 p-1 text-left">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1">
+            Biovised Admin Hub
+          </h2>
+          <p className="text-xs text-zinc-450 font-mono flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+            Secure administrative control portal • Active Admin: {user.displayName}
+          </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`text-xs px-3 sm:px-4 py-2 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all ${
-              activeTab === 'reports'
-                ? 'bg-orange-500 text-white'
-                : 'bg-zinc-800 text-zinc-400 border border-zinc-700/50 hover:text-white'
-            }`}
-          >
-            Report Invariants
-          </button>
-          <button
-            onClick={() => setActiveTab('youtube')}
-            className={`text-xs px-3 sm:px-4 py-2 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center gap-1 bg-zinc-800 text-zinc-400 border border-zinc-700/50 hover:text-white ${
-              activeTab === 'youtube' ? 'ring-2 ring-orange-500 text-white bg-zinc-950' : ''
-            }`}
-          >
-            <Youtube className="w-3.5 h-3.5 text-rose-500" /> YouTube Ingestion
-          </button>
-          <button
-            onClick={() => setActiveTab('verification')}
-            className={`text-xs px-3 sm:px-4 py-2 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center gap-1 bg-zinc-800 text-zinc-400 border border-zinc-700/50 hover:text-white ${
-              activeTab === 'verification' ? 'ring-2 ring-orange-500 text-white bg-zinc-950' : ''
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Profiler & Verification
-          </button>
-          <button
-            onClick={() => setActiveTab('lectures')}
-            className={`text-xs px-3 sm:px-4 py-2 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center gap-1 bg-zinc-800 text-zinc-400 border border-zinc-700/50 hover:text-white ${
-              activeTab === 'lectures' ? 'ring-2 ring-orange-500 text-white bg-zinc-950' : ''
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5 text-sky-400" /> Lectures Approval
-          </button>
+        {/* Tab Selection Row (Borderless and elegant like home screen segment options) */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 border-b border-zinc-900/60 pb-5">
+          {[
+            { id: 'reports', label: 'Report Invariants', icon: ShieldAlert, color: 'text-orange-500 hover:text-orange-400', desc: 'Manage user reports' },
+            { id: 'youtube', label: 'YouTube Ingestion', icon: Youtube, color: 'text-rose-500 hover:text-rose-400', desc: 'Sync playlist lectures' },
+            { id: 'verification', label: 'Verifier Queue', icon: ShieldCheck, color: 'text-emerald-500 hover:text-emerald-400', desc: 'Approve profiles/institutes' },
+            { id: 'lectures', label: 'Lectures Approval', icon: BookOpen, color: 'text-sky-450 hover:text-sky-400', desc: 'Moderate class videos' },
+            { id: 'content_manager', label: 'Content Manager', icon: Database, color: 'text-orange-500 hover:text-orange-400', desc: 'Database CRUD controls' },
+            { id: 'cdn_cache', label: 'CDN Cache Spec', icon: Activity, color: 'text-pink-500 hover:text-pink-400', desc: 'Test Edge CDN caching' }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`group flex flex-col items-center justify-between p-3.5 rounded-xl border transition-all duration-300 text-center cursor-pointer min-h-[96px] ${
+                  isActive
+                    ? 'bg-[#0E0E0E] border-zinc-800 text-white shadow-[0_4px_24px_rgba(0,0,0,0.8)]'
+                    : 'bg-transparent border-transparent text-zinc-450 hover:text-white hover:bg-[#0A0A0B]/50'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-1.5 w-full">
+                  <div className="p-1 rounded-lg transition-transform duration-300 group-hover:scale-125 group-hover:rotate-6">
+                    <Icon className={`w-5 h-5 ${isActive ? tab.color : 'text-zinc-550 group-hover:text-zinc-300'}`} />
+                  </div>
+                  <span className={`text-[11px] font-sans font-semibold tracking-tight ${isActive ? 'text-white' : 'text-zinc-405 group-hover:text-zinc-200'}`}>
+                    {tab.label}
+                  </span>
+                </div>
+                <span className="text-[9px] font-sans text-zinc-500 group-hover:text-zinc-400 mt-2 block truncate w-full text-center">
+                  {tab.desc}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1551,559 +1775,29 @@ export default function ModeratorDashboard() {
 
       {/* ================= YOUTUBE importer TAB ================= */}
       {activeTab === 'youtube' && (
-        <div className="space-y-6">
+        <YouTubeImporterTab
+          dbTeachers={dbTeachers}
+          dbInstitutes={dbInstitutes}
+          automatedFlowState={automatedFlowState}
+          automatedStepIndex={automatedStepIndex}
+          terminalLogs={terminalLogs}
+          manifestData={manifestData}
+          ingestionControlState={ingestionControlState}
+          handleToggleApproved={handleToggleApproved}
+          simulateQuotaError={simulateQuotaError}
+          setSimulateQuotaError={setSimulateQuotaError}
+          handleSimulateSyncChannelPlaylists={handleSimulateSyncChannelPlaylists}
+          handleSimulateSyncPlaylistVideos={handleSimulateSyncPlaylistVideos}
+          handleSimulateVerifyTeacherTrigger={handleSimulateVerifyTeacherTrigger}
+          handleStartAutomatedIngestion={handleStartAutomatedIngestion}
+          handleDownloadCSV={handleDownloadCSV}
+          addTerminalLog={addTerminalLog}
+        />
+      )}
 
-          {/* Automated Phase 1 Ingestion Console */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            
-            {/* Control Panel Bento */}
-            <div className="md:col-span-5 bg-zinc-950 border border-zinc-850 p-6 rounded-xl flex flex-col justify-between space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-rose-500 font-display font-medium text-sm">
-                  <RefreshCw className={`w-5 h-5 ${automatedFlowState === 'running' ? 'animate-spin text-rose-500' : 'text-rose-600'}`} />
-                  <span>Automated Phase 1 Pipeline Console</span>
-                </div>
-                
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  Triggers the entire end-to-end academic content intake flow. Automates YouTube API playlist fetches, Knowledge Graph validation checks, academic relevance filtering, and relational database writes.
-                </p>
-
-                {/* DB status indicators */}
-                <div className="bg-zinc-900/50 border border-zinc-850 p-4 rounded-xl space-y-3 font-mono text-[11px]">
-                  <div className="text-zinc-400 border-b border-zinc-800 pb-1.5 flex justify-between items-center">
-                    <span>INDEX REGISTRATION</span>
-                    <span className="text-[10px] uppercase bg-emerald-500/10 text-emerald-400 px-1.5 py-0.2 rounded border border-emerald-500/20">Active</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Target Syllabus:</span>
-                    <span className="text-brand-accent">JEE & NEET Core (Phase 1)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Playlists Ingested:</span>
-                    <span className="text-brand-accent font-bold">{(ingestionControlState?.playlistsImported || 0) + playlistsProcessedCount}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Lectures Ingested:</span>
-                    <span className="text-brand-accent font-bold">{(ingestionControlState?.lecturesImported || 0) + lecturesProcessedCount}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Control Approval Status:</span>
-                    <span className={ingestionControlState?.approved ? "text-emerald-400 font-semibold" : "text-amber-400"}>
-                      {ingestionControlState?.approved ? "Approved & Live" : "Pending Intake"}
-                    </span>
-                  </div>
-                  {ingestionControlState?.nextPhaseStart && (
-                    <div className="flex justify-between text-[10px] text-zinc-500">
-                      <span>Next Automated Sync:</span>
-                      <span>{new Date(ingestionControlState.nextPhaseStart).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Human-in-the-loop Ingestion Gate Checkpoint (Phase 2.2) */}
-                <div className="bg-zinc-900/40 border border-zinc-850/60 p-3 rounded-lg flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="text-[11px] font-mono text-zinc-300 flex items-center gap-1">
-                      <CheckCircle className={`w-3.5 h-3.5 ${ingestionControlState?.approved ? 'text-emerald-500' : 'text-zinc-500'}`} />
-                      <span>Approved (Manual Checkpoint Gate)</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-500">Unlocks daily cron runs and Firestore listeners.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={!!ingestionControlState?.approved} 
-                      onChange={(e) => handleToggleApproved(e.target.checked)}
-                      disabled={automatedFlowState === 'running'}
-                      className="sr-only peer" 
-                    />
-                    <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600 peer-checked:after:bg-white"></div>
-                  </label>
-                </div>
-
-                {/* Quota tester toggle */}
-                <div className="bg-zinc-900/40 border border-zinc-850/60 p-3 rounded-lg flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="text-[11px] font-mono text-zinc-300 flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Simulate HTTP 429 Quotas</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-500">Forces exponential backoff with random jitter.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={simulateQuotaError} 
-                      onChange={(e) => setSimulateQuotaError(e.target.checked)}
-                      disabled={automatedFlowState === 'running'}
-                      className="sr-only peer" 
-                    />
-                    <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600 peer-checked:after:bg-white"></div>
-                  </label>
-                </div>
-
-                {/* Phase 2 Action Triggers Section */}
-                <div className="border-t border-zinc-850 pt-4 space-y-3">
-                  <div className="flex items-center gap-2 text-zinc-300 font-display font-medium text-xs uppercase tracking-wider">
-                    <Activity className="w-4 h-4 text-emerald-500 animate-pulse" />
-                    <span>Phase 2 Automated Triggers</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSimulateSyncChannelPlaylists}
-                      disabled={automatedFlowState === 'running'}
-                      className="flex items-center justify-between text-left px-3 py-2 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-800 disabled:opacity-40 text-[11px] text-zinc-200 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-mono text-[11px] font-semibold text-zinc-300">syncChannelPlaylists</div>
-                        <div className="text-[10px] text-zinc-500 font-sans">Simulate Scheduled Ingestion Cron (Daily 03:00)</div>
-                      </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSimulateSyncPlaylistVideos}
-                      disabled={automatedFlowState === 'running'}
-                      className="flex items-center justify-between text-left px-3 py-2 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-800 disabled:opacity-40 text-[11px] text-zinc-200 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-mono text-[11px] font-semibold text-zinc-300">syncPlaylistVideos</div>
-                        <div className="text-[10px] text-zinc-500 font-sans">Simulate Playlist Write / Approval Trigger</div>
-                      </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSimulateVerifyTeacherTrigger}
-                      disabled={automatedFlowState === 'running'}
-                      className="flex items-center justify-between text-left px-3 py-2 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-800 disabled:opacity-40 text-[11px] text-zinc-200 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-mono text-[11px] font-semibold text-zinc-300">verifyTeacherProfile</div>
-                        <div className="text-[10px] text-zinc-500 font-sans">Simulate Teacher-Creation / Google KG Check</div>
-                      </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleStartAutomatedIngestion}
-                  disabled={automatedFlowState === 'running'}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-50 text-white font-mono text-xs py-3 rounded-xl transition-all shadow-lg hover:shadow-rose-600/10 cursor-pointer"
-                >
-                  {automatedFlowState === 'running' ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Executing Pipeline...
-                    </>
-                  ) : (
-                    <>
-                      <Database className="w-4 h-4" />
-                      Trigger Automated Phase 1 Pipeline
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Ingestion Real-time Monitor Bento */}
-            <div className="md:col-span-7 bg-zinc-950 border border-zinc-850 p-6 rounded-xl flex flex-col justify-between space-y-4 min-h-[380px]">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-zinc-850">
-                  <div className="flex items-center gap-2 text-zinc-300 font-display font-medium text-sm">
-                    <Terminal className="w-4 h-4 text-rose-500" />
-                    <span>Real-time Ingestion Logger Console</span>
-                  </div>
-                  {manifestData.length > 0 && (
-                    <button
-                      onClick={handleDownloadCSV}
-                      className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-950/20 px-2 py-1 rounded border border-emerald-900/40"
-                    >
-                      <FileSpreadsheet className="w-3 h-3" />
-                      Manifest CSV
-                    </button>
-                  )}
-                </div>
-
-                {/* Pipeline Flowchart Progress */}
-                {automatedFlowState !== 'idle' && (
-                  <div className="bg-zinc-900/40 p-3 rounded-xl border border-zinc-850/60">
-                    <span className="text-[10px] font-mono uppercase text-zinc-500">Pipeline Stages (Flowchart 1.7)</span>
-                    <div className="mt-2 grid grid-cols-4 sm:grid-cols-7 gap-1.5 text-center text-[9px] font-mono">
-                      {[
-                        'Target', 'Fetch Pl', 'Filter', 'Verify KG', 'Extract', 'Firestore', 'CSV Out'
-                      ].map((step, idx) => {
-                        const isActive = automatedStepIndex === idx;
-                        const isDone = automatedStepIndex > idx;
-                        return (
-                          <div
-                            key={step}
-                            className={`p-1.5 rounded border transition-all ${
-                              isActive 
-                                ? 'bg-orange-500/15 border-orange-500 text-orange-400 font-bold active-step-glow'
-                                : isDone
-                                  ? 'bg-emerald-500/10 border-emerald-800 text-emerald-400'
-                                  : 'bg-zinc-900 border-zinc-850 text-zinc-500'
-                            }`}
-                          >
-                            <div className="line-clamp-1">{step}</div>
-                            <div className="mt-1 text-[10px] flex justify-center">
-                              {isActive ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                              ) : isDone ? (
-                                <Check className="w-2.5 h-2.5" />
-                              ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Logs Terminal */}
-                <div className="bg-zinc-900 border border-zinc-850 p-4 rounded-xl min-h-[180px] max-h-[220px] overflow-y-auto font-mono text-[10px] space-y-1.5 custom-scrollbar text-left scroll-smooth">
-                  {terminalLogs.length === 0 ? (
-                    <div className="text-zinc-500 flex flex-col justify-center items-center h-[140px] space-y-2">
-                      <Terminal className="w-8 h-8 text-zinc-800" />
-                      <p>Pipeline is idle. Direct terminal output triggers upon deployment.</p>
-                    </div>
-                  ) : (
-                    terminalLogs.map((log, index) => (
-                      <div 
-                        key={index} 
-                        className={`flex items-start gap-1.5 ${
-                          log.type === 'success' ? 'text-emerald-400' :
-                          log.type === 'warn' ? 'text-amber-400' :
-                          log.type === 'error' ? 'text-red-400' :
-                          log.type === 'retry' ? 'text-indigo-400 font-bold animate-pulse' :
-                          'text-zinc-300'
-                        }`}
-                      >
-                        <span className="text-zinc-500 shrink-0">[{log.time}]</span>
-                        <p className="leading-normal">{log.text}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Manifest summary banner */}
-              {automatedFlowState === 'completed' && (
-                <div className="bg-emerald-950/20 border border-emerald-900/60 p-3.5 rounded-xl flex items-center justify-between text-xs text-emerald-400">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <div>
-                      <p className="font-bold uppercase tracking-wide">PHASE 1 INGESTION COMPLETE</p>
-                      <p className="text-[10px] opacity-80 mt-0.5">Syllabus manifest successfully registered and exported to CSV.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleDownloadCSV}
-                    className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] py-1.5 px-3 rounded-lg transition-all shadow-md cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3 h-3" />
-                    Download CSV
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Divider line */}
-          <div className="border-t border-zinc-850 my-6"></div>
-
-          {/* Manual playlist mapping & inspect widget */}
-          <div className="bg-zinc-950 border border-zinc-850 p-6 rounded-xl space-y-4">
-            <div className="flex items-center gap-2 text-rose-500 font-display font-medium text-sm">
-              <Youtube className="w-5 h-5" />
-              <span>Real YouTube Data Catalog Ingestor Pipeline</span>
-            </div>
-            
-            <p className="text-xs leading-relaxed text-zinc-400">
-              Select one of the manually compiled, verified coaching channels in the system. The platform will call 
-              the YouTube Data API v3 on our custom secure proxy backend using protected credentials to map and verify real playlists.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-              <div className="w-full sm:w-80">
-                <select
-                  value={selectedChannelId}
-                  onChange={(e) => setSelectedChannelId(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 text-xs text-brand-accent rounded-lg p-2.5 outline-none font-sans"
-                >
-                  <option value="" disabled>Select verified Channel...</option>
-                  {channels.map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.name} ({ch.id.slice(0, 8)}...)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                onClick={handleFetchPlaylists}
-                disabled={playlistsLoading}
-                className="flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs py-2.5 px-5 rounded-lg transition-all cursor-pointer disabled:opacity-50"
-              >
-                {playlistsLoading ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Database className="w-3.5 h-3.5" />
-                    Analyze Playlists
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Sandbox banner notification */}
-            {isDemoMode && (
-              <div className="bg-amber-950/40 border border-amber-900 p-4 rounded-lg flex items-start gap-2 text-xs text-amber-400 font-mono leading-relaxed">
-                <Sparkles className="w-5 h-5 shrink-0 text-amber-400" />
-                <div>
-                  <p className="font-bold uppercase tracking-tight">DEMO GRAPH SANDBOX ACTIVE</p>
-                  <p className="mt-0.5 opacity-90">
-                    Your environment lacks a custom <code className="bg-neutral-900 px-1 py-0.2 rounded text-white">YOUTUBE_API_KEY</code>. 
-                    Displaying static verified lists representing real JEE/NEET content. 
-                    Provide your key in AI Studio Secrets menu to activate live proxies.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {playlistsError && (
-              <div className="bg-red-950/40 border border-red-900/50 p-4 rounded-lg text-xs font-mono text-red-400">
-                Error from proxy pipeline: {playlistsError}
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
-            {/* Playlist Column Selection */}
-            <div className="lg:col-span-5 space-y-4">
-              <h3 className="font-display font-semibold text-brand-accent text-sm flex items-center gap-2">
-                <span>Playlists Discovered ({playlists.length})</span>
-              </h3>
-
-              {playlistsLoading ? (
-                <div className="p-8 text-center border border-zinc-850 rounded-xl font-mono text-xs text-zinc-400">
-                  Negotiating secure handshake with YouTube...
-                </div>
-              ) : playlists.length === 0 ? (
-                <div className="p-8 text-center border border-zinc-850 rounded-xl text-xs text-zinc-400 font-mono">
-                  Select a channel and connect to query active chapters.
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-                  {playlists.map((playlist) => (
-                    <div
-                      key={playlist.id}
-                      onClick={() => handleInspectPlaylist(playlist)}
-                      className={`group border rounded-xl p-4 text-left cursor-pointer transition-all space-y-2 bg-zinc-950 hover:bg-zinc-900 ${
-                        activePlaylist?.id === playlist.id
-                          ? 'border-rose-500 bg-zinc-900/50 ring-1 ring-rose-500'
-                          : 'border-zinc-850'
-                      }`}
-                    >
-                      <img
-                        src={getPlaylistThumbnail(playlist)}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        className="w-full h-32 object-cover rounded-lg border border-zinc-800"
-                      />
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-semibold text-brand-accent line-clamp-1 group-hover:text-rose-400 transition-colors">
-                          {playlist.title}
-                        </h4>
-                        <p className="text-[11px] text-zinc-400 line-clamp-2">
-                          {playlist.description || 'No database description synced.'}
-                        </p>
-                        <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-1 border-t border-zinc-850/60">
-                          <span>Real Lectures: {playlist.lecturesCount}</span>
-                          <span className="text-zinc-500 flex items-center gap-0.5">
-                            ID: {playlist.id.slice(0, 10)}... <ExternalLink className="w-2.5 h-2.5" />
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Ingestion & Verification Control Column */}
-            <div className="lg:col-span-7 space-y-4">
-              <h3 className="font-display font-semibold text-brand-accent text-sm">
-                Inundation Audit & Verification
-              </h3>
-
-              {importSuccess && (
-                <div className="bg-emerald-950/40 border border-emerald-900 text-xs text-emerald-400 font-mono p-4 rounded-xl flex items-start gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold uppercase">DATABASE ENTRY SECURED</p>
-                    <p className="mt-0.5">{importSuccess}</p>
-                  </div>
-                </div>
-              )}
-
-              {activePlaylist ? (
-                <div className="bg-zinc-950 border border-zinc-850 p-6 rounded-xl space-y-6">
-                  
-                  {/* Sync validation headers */}
-                  <div className="space-y-2 pb-4 border-b border-zinc-850">
-                    <span className="text-[10px] font-mono uppercase bg-rose-500/10 text-rose-400 px-2.5 py-0.5 rounded border border-rose-500/20">
-                      Verifying playlist
-                    </span>
-                    <h4 className="text-sm font-semibold text-zinc-100">{activePlaylist.title}</h4>
-                    <p className="text-xs text-zinc-400 italic">"{activePlaylist.description}"</p>
-                  </div>
-
-                  {/* Schema parameters */}
-                  <div className="space-y-4">
-                    <h5 className="text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">
-                      Relational Database Mappings:
-                    </h5>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-zinc-400">ASSOCIATE VERIFIED EDUCATOR:</label>
-                        <select
-                          className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded p-2 outline-none"
-                          value={matchingTeacherId}
-                          onChange={(e) => setMatchingTeacherId(e.target.value)}
-                        >
-                          {dbTeachers.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name} ({t.subject})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-zinc-400">ASSIGN SUBJECT:</label>
-                        <select
-                          className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded p-2 outline-none"
-                          value={selectedSubject}
-                          onChange={(e) => setSelectedSubject(e.target.value)}
-                        >
-                          <option value="Physics">Physics</option>
-                          <option value="Chemistry">Chemistry</option>
-                          <option value="Mathematics">Mathematics</option>
-                          <option value="Biology">Biology</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-zinc-400">ASSIGN EXAM TARGET:</label>
-                        <select
-                          className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded p-2 outline-none"
-                          value={selectedExam}
-                          onChange={(e) => setSelectedExam(e.target.value as any)}
-                        >
-                          <option value="JEE">JEE (Main & Advanced)</option>
-                          <option value="NEET">NEET (UG Prep)</option>
-                          <option value="Both">Both Exams</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-zinc-400">CONTENT CLASSIFICATION:</label>
-                        <select
-                          className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded p-2 outline-none"
-                          value={selectedContentType}
-                          onChange={(e) => setSelectedContentType(e.target.value as any)}
-                        >
-                          <option value="lecture">Standard Lectures Series</option>
-                          <option value="oneshot">Chapter One Shot summary</option>
-                        </select>
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Lecture List Inspection with Quality Control Checklists */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">
-                        Lectures to Ingest ({lectures.length})
-                      </h5>
-                      <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-0.5 px-2 rounded font-mono uppercase">
-                        Shorter/Strategy Hype Content Automatically Filtered
-                      </span>
-                    </div>
-
-                    {lecturesLoading ? (
-                      <p className="text-xs font-mono text-zinc-400 py-4 text-center">Parsing statistical signals from videos...</p>
-                    ) : lecturesError ? (
-                      <p className="text-xs font-mono text-rose-400 py-4 text-center">{lecturesError}</p>
-                    ) : lectures.length === 0 ? (
-                      <p className="text-xs font-mono text-zinc-400 py-4 text-center">No compliance-vetted videos in playlist.</p>
-                    ) : (
-                      <div className="space-y-2 border border-zinc-850 p-2.5 rounded-lg max-h-[300px] overflow-y-auto bg-zinc-900/30">
-                        {lectures.map((lec, idx) => (
-                          <div key={lec.id || idx} className="flex gap-2.5 items-start p-2 rounded bg-zinc-900 border border-zinc-800">
-                            <span className="text-[10px] font-mono text-zinc-500 mt-1">{idx+1}</span>
-                            <div className="flex-1 min-w-0 space-y-0.5 text-xs">
-                              <p className="text-brand-accent font-semibold line-clamp-1">{lec.title}</p>
-                              <div className="flex items-center gap-3 text-[10px] font-mono text-zinc-400">
-                                <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5 text-zinc-500" /> {lec.duration}</span>
-                                <span className="flex items-center gap-0.5"><Eye className="w-2.5 h-2.5 text-zinc-500" /> {lec.viewsCount?.toLocaleString()}</span>
-                                <span className="flex items-center gap-0.5"><Heart className="w-2.5 h-2.5 text-zinc-500" /> {lec.likesCount?.toLocaleString()}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Submission triggers */}
-                  <div className="pt-4 border-t border-zinc-850 flex justify-end gap-3">
-                    <button
-                      onClick={() => { setActivePlaylist(null); setLectures([]); }}
-                      className="text-xs text-brand-gray hover:text-brand-accent font-mono cursor-pointer uppercase py-2 px-3"
-                    >
-                      Reset Selection
-                    </button>
-                    <button
-                      onClick={handleConfirmIngest}
-                      disabled={importing || lecturesLoading || lectures.length === 0}
-                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs px-5 py-2.5 rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                    >
-                      {importing ? 'Processing Transaction...' : 'Verify & Ingest into Production'} <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                </div>
-              ) : (
-                <div className="border border-zinc-850 rounded-xl p-8 text-center text-xs text-zinc-400 font-mono bg-zinc-900/5">
-                  Select a discovered playlist from the left view to initialize verification credentials.
-                </div>
-              )}
-            </div>
-
-          </div>
-
-        </div>
+      {/* ================= CONTENT MANAGER TAB ================= */}
+      {activeTab === 'content_manager' && (
+        <ContentManagerTab />
       )}
 
       {/* ================= VERIFICATION TAB ================= */}
@@ -2863,6 +2557,217 @@ export default function ModeratorDashboard() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'cdn_cache' && (
+        <div className="space-y-8 animate-fade-in text-zinc-100">
+          
+          {/* Top Banner introducing Phase 4 Edge Architecture */}
+          <div className="bg-[#101011] border border-neutral-900 rounded-xl p-6 relative overflow-hidden text-left">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.02]">
+              <Database className="w-48 h-48 text-pink-500" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-widest bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                  Infrastructure Spec (Phase 4)
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-widest bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                  Cloudflare Gateway
+                </span>
+              </div>
+              <h2 className="text-xl font-semibold text-zinc-100 tracking-tight font-sans">
+                Edge CDN Caching Specifications & Pipeline Verifier
+              </h2>
+              <p className="text-sm text-zinc-400 max-w-3xl leading-relaxed">
+                As a senior infrastructure safeguard, we implement extreme cache optimization on our Cloudflare Edge Network. 
+                Below is the verified HTTP headers topography that our Google Cloud Storage bucket origin and backend server enforce. 
+                This ensures maximum cache hit ratios for immutable deliverables while asserting ephemeral signed private channels bypass the cache entirely.
+              </p>
+            </div>
+          </div>
+
+          {/* HTTP HEADER SPECIFICATION MATRIX */}
+          <div className="space-y-4 text-left">
+            <h3 className="text-base font-medium text-zinc-100 flex items-center gap-2">
+              <Layers className="w-4.5 h-4.5 text-zinc-400" /> HTTP Header Specification Matrix
+            </h3>
+            <div className="overflow-x-auto bg-[#101011] border border-neutral-900 rounded-xl">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-neutral-900 bg-neutral-950/40 font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+                    <th className="p-4 font-semibold">Asset Category</th>
+                    <th className="p-4 font-semibold">Examples</th>
+                    <th className="p-4 font-semibold">Cache-Control Header</th>
+                    <th className="p-4 font-semibold">Edge TTL</th>
+                    <th className="p-4 font-semibold">ETag Validation</th>
+                    <th className="p-4 font-semibold">Cloudflare Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-900 font-mono text-zinc-300">
+                  <tr className="hover:bg-neutral-950/20">
+                    <td className="p-4 font-sans font-medium text-zinc-100 font-mono">
+                      Public Immutable Assets
+                    </td>
+                    <td className="p-4 text-zinc-400 font-sans">
+                      Thumbnails, Channel PFPs, Test Banners
+                    </td>
+                    <td className="p-4 text-emerald-405 font-mono">
+                      public, max-age=31536000, immutable
+                    </td>
+                    <td className="p-4 font-sans">1 Year</td>
+                    <td className="p-4 text-sky-400 font-sans">Stable Content Hash</td>
+                    <td className="p-4 font-sans">
+                      <span className="bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                        HIT (Cache Edge)
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-neutral-950/20">
+                    <td className="p-4 font-sans font-medium text-zinc-100 font-mono">
+                      Private Ephemeral Assets
+                    </td>
+                    <td className="p-4 text-zinc-400 font-sans">
+                      Signed PDF keys, Exam documents, Private tokens
+                    </td>
+                    <td className="p-4 text-rose-455 font-mono">
+                      private, no-cache, no-store, must-revalidate
+                    </td>
+                    <td className="p-4 font-sans">Bypassed (0s)</td>
+                    <td className="p-4 text-rose-400 font-sans">Dynamic Token Checked</td>
+                    <td className="p-4 font-sans">
+                      <span className="bg-rose-955/40 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                        BYPASS (Dynamic Shield)
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-neutral-950/20">
+                    <td className="p-4 font-sans font-medium text-zinc-100 font-mono">
+                      System API Responses
+                    </td>
+                    <td className="p-4 text-zinc-400 font-sans">
+                      Channels, Lectures metadata API
+                    </td>
+                    <td className="p-4 text-amber-455 font-mono">
+                      no-cache, private
+                    </td>
+                    <td className="p-4 font-sans">Bypassed (0s)</td>
+                    <td className="p-4 text-zinc-500 font-sans">None</td>
+                    <td className="p-4 font-sans">
+                      <span className="bg-amber-950/40 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                        DYNAMIC (API Origin)
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* AUTOMATED INTEGRATION TESTING CONSOLE */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left">
+            
+            {/* Control Panel Card */}
+            <div className="bg-[#101011] border border-neutral-900 rounded-xl p-5 space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-pink-400 flex items-center gap-1">
+                  <Terminal className="w-3 h-3" /> Testing Scope Details
+                </span>
+                <h4 className="text-sm font-semibold text-zinc-200">
+                  E2E Pipeline Testing Suite
+                </h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Triggers our system infrastructure verification harness to validate the complete asset pipeline:
+                </p>
+                <ul className="text-xs text-zinc-500 space-y-1.5 list-disc pl-4 leading-relaxed font-mono">
+                  <li><b className="text-zinc-400 font-sans">Act I</b>: Secures an upload request, applying high-entropy tokens and forcing uniform WebP optimization.</li>
+                  <li><b className="text-zinc-400 font-sans">Act II</b>: Decodes the database path dynamically through MediaUrlResolver.</li>
+                  <li><b className="text-zinc-400 font-sans">Act III</b>: Simulates HTTP HEAD requests, and asserts response headers for cache integrity, mime correctness, and edge network caching instructions.</li>
+                </ul>
+              </div>
+
+              <div className="pt-2 border-t border-neutral-900 space-y-3">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-zinc-550">Framework Configuration:</span>
+                  <span className="text-pink-400 font-bold">Jest / ts-node</span>
+                </div>
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-zinc-550">CDN Target Topography:</span>
+                  <span className="text-orange-400 font-bold">Cloudflare Enterprise</span>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleTriggerCdnVerification}
+                  disabled={cdnTestingRunning}
+                  className={`w-full py-2.5 rounded-lg font-mono text-xs font-semibold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    cdnTestingRunning
+                      ? 'bg-zinc-800 text-zinc-500 border border-zinc-750'
+                      : 'bg-pink-600 hover:bg-pink-500 text-white border border-pink-500/20 hover:scale-[1.01]'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${cdnTestingRunning ? 'animate-spin' : ''}`} />
+                  {cdnTestingRunning ? 'Executing Asserts...' : 'Run Integration Pipeline'}
+                </button>
+              </div>
+            </div>
+
+            {/* Simulated Live Console Output */}
+            <div className="lg:col-span-2 bg-neutral-950/70 border border-neutral-900 rounded-xl p-5 flex flex-col space-y-3 font-mono min-h-[300px]">
+              <div className="flex justify-between items-center border-b border-neutral-900 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500/80 inline-block animate-pulse"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 inline-block"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block"></span>
+                  </span>
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-550">
+                    Integration Testing CLI Console
+                  </span>
+                </div>
+                {cdnTestSuccess !== null && (
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                    cdnTestSuccess 
+                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/40' 
+                      : 'bg-rose-955 text-rose-400 border border-rose-800/40'
+                  }`}>
+                    {cdnTestSuccess ? 'PASSED with Zero Defects ✔' : 'REGRESSION FAILURE ✘'}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto max-h-[250px] space-y-1.5 text-[11px] text-zinc-400 leading-normal font-mono scrollbar-thin scrollbar-thumb-zinc-800">
+                {cdnTestLogs.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-650 text-center py-12 space-y-2">
+                    <Terminal className="w-10 h-10 text-neutral-800" />
+                    <p className="text-xs">Testing suite is ready in idle state.</p>
+                    <p className="text-[10px]">Click the control button to initiate E2E asset validations.</p>
+                  </div>
+                ) : (
+                  cdnTestLogs.map((log, index) => {
+                    let colorClass = "text-zinc-400";
+                    if (log.startsWith("[SUCCESS]")) colorClass = "text-emerald-400 font-semibold";
+                    else if (log.startsWith("[FAILURE]")) colorClass = "text-rose-400 font-bold";
+                    else if (log.includes("WebP") || log.includes("CDN") || log.includes("ACT")) {
+                      colorClass = "text-zinc-200";
+                    }
+                    if (log.startsWith("[INIT]") || log.startsWith("[CLI]")) {
+                      colorClass = "text-zinc-500";
+                    }
+                    return (
+                      <div key={index} className={`flex items-start gap-1 p-0.5 hover:bg-neutral-900/10 rounded ${colorClass}`}>
+                        <span className="text-pink-500 select-none mr-1">➜</span>
+                        <span>{log}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+          </div>
+
         </div>
       )}
 

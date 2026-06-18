@@ -49,7 +49,7 @@ const mappings: Record<string, string> = {
 };
 
 export const getPlaylistThumbnail = (playlist: Playlist): string => {
-  if (playlist.thumbnailUrl && (playlist.thumbnailUrl.includes('ytimg.com') || playlist.thumbnailUrl.includes('googleusercontent.com') || playlist.thumbnailUrl.includes('youtube.543269865'))) {
+  if (playlist.thumbnailUrl && (playlist.thumbnailUrl.startsWith('http://') || playlist.thumbnailUrl.startsWith('https://'))) {
     return playlist.thumbnailUrl;
   }
 
@@ -70,7 +70,7 @@ export const getPlaylistThumbnail = (playlist: Playlist): string => {
 };
 
 export const getLectureThumbnail = (lec: Lecture): string => {
-  if (lec.thumbnailUrl && (lec.thumbnailUrl.includes('ytimg.com') || lec.thumbnailUrl.includes('youtube.543269865') || lec.thumbnailUrl.includes('googleusercontent.com'))) {
+  if (lec.thumbnailUrl && (lec.thumbnailUrl.startsWith('http://') || lec.thumbnailUrl.startsWith('https://'))) {
     return lec.thumbnailUrl;
   }
 

@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Bookmark
 } from 'lucide-react';
-import { TeacherProfile, InstituteProfile, Review, TrustScoreBreakdown, Lecture, Playlist, Batch } from '../types';
+import { TeacherProfile, InstituteProfile, Review, EntityTrustScoreBreakdown as TrustScoreBreakdown, Lecture, Playlist, Batch } from '../types';
 import { getLectureThumbnail, getPlaylistThumbnail } from '../services/thumbnailHelper';
 import {
   fetchReviews,
@@ -248,6 +248,11 @@ export default function DetailsModal({
     }
   };
 
+  const dynamicRatingCount = reviews.length;
+  const dynamicAverageRating = dynamicRatingCount > 0 
+    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / dynamicRatingCount).toFixed(1)
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-fade-in text-left">
       <div className="w-full max-w-5xl h-[85vh] bg-brand-dark border border-brand-border rounded-xl shadow-2xl flex flex-col overflow-hidden">
@@ -426,9 +431,13 @@ export default function DetailsModal({
                   {/* Dynamic metrics block */}
                   <div className="bg-brand-black border border-brand-border rounded-xl p-4 min-w-[200px] text-center md:text-right space-y-1">
                     <span className="block text-[10px] font-mono text-brand-gray uppercase">Aggregate Score</span>
-                    <span className="text-3xl font-display font-bold text-brand-accent">{profile.rating}★</span>
+                    {dynamicAverageRating ? (
+                      <span className="text-3xl font-display font-bold text-brand-accent">{dynamicAverageRating}★</span>
+                    ) : (
+                      <span className="text-sm font-mono font-medium text-amber-500 block uppercase tracking-wide">No ratings yet</span>
+                    )}
                     <span className="block text-[10px] font-mono text-brand-gray uppercase mt-1">Review Volume</span>
-                    <span className="text-sm font-mono font-medium text-brand-accent">{profile.reviewCount} Student reviews</span>
+                    <span className="text-sm font-mono font-medium text-brand-accent">{dynamicRatingCount} Student reviews</span>
                   </div>
                 </div>
               )}

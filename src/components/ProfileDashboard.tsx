@@ -21,8 +21,10 @@ import {
   FileText,
   CheckCircle,
   ExternalLink,
-  LogOut
+  LogOut,
+  ShieldAlert
 } from 'lucide-react';
+import ModeratorDashboard from './ModeratorDashboard';
 
 interface ProfileDashboardProps {
   onSelectLecture: (lecture: Lecture) => void;
@@ -42,7 +44,7 @@ export default function ProfileDashboard({
   activeLecture
 }: ProfileDashboardProps) {
   const { user, updatePreferences, resetPreferences, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'history' | 'watchlist' | 'following' | 'files'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'watchlist' | 'following' | 'files' | 'admin'>('history');
 
   // Dashboard logs lists
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
@@ -115,8 +117,8 @@ export default function ProfileDashboard({
             <h2 className="text-xl font-display font-medium text-brand-accent">{user.displayName}</h2>
             <p className="text-xs text-brand-gray font-mono">{user.email}</p>
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <span className="inline-block text-[10px] font-mono uppercase bg-neutral-800 text-brand-accent px-2 py-0.5 rounded animate-pulse">
-                Role Access: {user.role}
+              <span className="inline-block text-[10px] font-mono lowercase bg-zinc-900 border border-zinc-800 text-zinc-400 px-2.5 py-0.5 rounded-full">
+                {user.email === 'adarshaman898@gmail.com' ? 'admin' : 'guest'}
               </span>
               <button
                 onClick={logout}
@@ -133,7 +135,7 @@ export default function ProfileDashboard({
           <div className="space-y-2">
             <label className="block text-[10px] font-mono text-brand-gray uppercase tracking-wider">Exam Stream Focus</label>
             <div className="flex flex-wrap gap-1.5 md:justify-end">
-              {(['JEE', 'NEET', 'Both'] as const).map((type) => (
+              {(['JEE', 'NEET'] as const).map((type) => (
                 <button
                   key={type}
                   onClick={() => updatePreferences({ examType: type })}
@@ -143,7 +145,7 @@ export default function ProfileDashboard({
                       : 'border-brand-border bg-brand-black text-brand-gray hover:text-brand-accent'
                   }`}
                 >
-                  {type === 'Both' ? 'Both' : type}
+                  {type}
                 </button>
               ))}
             </div>
@@ -189,7 +191,8 @@ export default function ProfileDashboard({
           { id: 'history', label: 'Watch History', icon: Clock },
           { id: 'watchlist', label: 'Watch Later', icon: Bookmark },
           { id: 'following', label: 'Educators Followed', icon: User },
-          { id: 'files', label: 'Cabinet Files', icon: Upload }
+          { id: 'files', label: 'Cabinet Files', icon: Upload },
+          ...(user.email === 'adarshaman898@gmail.com' ? [{ id: 'admin', label: 'Admin Panel', icon: ShieldAlert }] : [])
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -198,7 +201,7 @@ export default function ProfileDashboard({
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 py-2.5 px-5 text-xs font-mono font-medium border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'border-white text-brand-accent'
+                  ? 'border-white text-brand-accent font-semibold'
                   : 'border-transparent text-brand-gray hover:text-brand-accent'
               }`}
             >
@@ -226,7 +229,15 @@ export default function ProfileDashboard({
                     key={h.id}
                     className="p-3 bg-brand-black border border-brand-border rounded-xl flex gap-3 items-center"
                   >
-                    <img src={getLectureThumbnail({ id: h.lectureId, title: h.lectureTitle, thumbnailUrl: h.thumbnailUrl } as any)} alt={h.lectureTitle} className="w-20 h-12 object-cover rounded border border-brand-border" />
+                    <img 
+                      src={getLectureThumbnail({ id: h.lectureId, title: h.lectureTitle, thumbnailUrl: h.thumbnailUrl } as any)} 
+                      alt={h.lectureTitle} 
+                      className="w-20 h-12 object-cover rounded-lg border border-brand-border flex-shrink-0 bg-zinc-900" 
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://img.youtube.com/vi/9Bv_M6e8858/hqdefault.jpg';
+                      }}
+                    />
                     <div className="flex-grow min-w-0">
                       <p className="text-xs font-medium text-brand-accent truncate leading-tight">{h.lectureTitle}</p>
                       <div className="flex items-center gap-2 text-[10px] font-mono text-brand-gray mt-1 flex-wrap">
@@ -356,6 +367,12 @@ export default function ProfileDashboard({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {user.email === 'adarshaman898@gmail.com' && activeTab === 'admin' && (
+          <div className="pt-2 animate-fade-in">
+            <ModeratorDashboard />
           </div>
         )}
       </div>
