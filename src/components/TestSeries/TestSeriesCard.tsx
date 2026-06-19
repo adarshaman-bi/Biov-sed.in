@@ -28,10 +28,10 @@ const getTrustBadgeStyle = (score: number | null | undefined) => {
     return "bg-zinc-900 border-zinc-800 text-zinc-500";
   }
   if (score >= 75) {
-    return "bg-emerald-950/40 border-emerald-900/60 text-emerald-400";
+    return "bg-white/10 border-white/20 text-[#EEEEEE] font-extrabold";
   }
   if (score >= 50) {
-    return "bg-amber-950/45 border-amber-900/35 text-amber-500";
+    return "bg-zinc-900 border-zinc-800 text-zinc-350";
   }
   return "bg-zinc-900 border-zinc-800 text-zinc-500";
 };
@@ -57,25 +57,26 @@ export const TestSeriesCard: React.FC<TestSeriesCardProps> = ({ id, item, onClic
           <SafeImage
             src={item.bannerUrl}
             alt={item.provider}
-            className="w-full h-full"
-            imageClassName="transition-transform duration-500 group-hover:scale-103"
+            className="w-full h-full aspect-video object-cover"
+            imageClassName="transition-transform duration-500 group-hover:scale-103 aspect-video object-cover"
             variant="banner"
           />
 
           {/* Left overlay badge: Double-bordered Avatar Component with Micro-badge */}
           <div className="absolute bottom-2 left-2 z-20 flex items-center shadow-lg">
-            <div className="relative w-9 h-9 rounded-full bg-black border-[2px] border-zinc-950 ring-[1.5px] ring-[#2DD4BF]/65 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="relative w-9 h-9 rounded-full bg-black border-[2px] border-zinc-950 ring-[1.5px] ring-white/60 flex items-center justify-center overflow-hidden flex-shrink-0">
               <SafeImage
-                src={item.thumbnailUrl}
+                src={item.logo}
                 alt={item.provider}
                 variant="avatar"
-                className="w-full h-full rounded-full"
+                className="w-full h-full rounded-full aspect-square object-contain"
+                imageClassName="aspect-square object-contain"
                 fallbackInitials={initials.slice(0, 2)}
               />
 
               {/* Robust verified educator micro-badge sitting on bottom-right of the circle */}
               {item.trustScore !== null && item.trustScore !== undefined && item.trustScore >= 75 && (
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#2DD4BF] rounded-full border border-black flex items-center justify-center shadow-xs" title="Verified Provider">
+                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-white rounded-full border border-black flex items-center justify-center shadow-xs" title="Verified Provider">
                   <span className="text-[6px] text-black font-extrabold font-sans leading-none">✓</span>
                 </div>
               )}
@@ -128,7 +129,7 @@ export const TestSeriesCard: React.FC<TestSeriesCardProps> = ({ id, item, onClic
             <DynamicRating 
               targetId={item.id}
               className="flex items-center gap-1 h-5 text-xs text-zinc-400 font-mono"
-              starClassName="w-3 h-3 text-amber-500 fill-amber-500 shrink-0 font-sans"
+              starClassName="w-3 h-3 text-[#FFEFD5] fill-[#FFEFD5] shrink-0 font-sans"
               textClassName="text-[10px] text-zinc-500"
             />
           </div>

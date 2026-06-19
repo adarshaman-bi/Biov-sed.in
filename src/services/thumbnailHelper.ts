@@ -1,72 +1,95 @@
 import { Playlist, Lecture } from '../types';
+import { db } from '../firebase';
+import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 
-const mappings: Record<string, string> = {
-  'play_pw_alakh_pace_ktg': '9Bv_M6e8858',
-  'play_jw_units': 'O3_D7T6z-fE',
-  'play_jw_basic_math': 'X9bZ3c0s6Z0',
-  'play_jw_mechanics_rj': '5H8H69Wz01k',
-  'play_pw_botany_30d': 'bVbU1E_UqK0',
-  'play_pw_neet_mindmaps': 'g4J3Wq_S7Fk',
-  'play_comp_kinematics': 'lA9K8T4Gf7Y',
-  'play_comp_goc': '0_d_D91cDwU',
-  'play_comp_maths_notes': 'z86-ja0PSn0',
-  'play_res_jee_celebration': 'Ltbn_ZF-pDs',
-  'play_unac_current': 'IqP3r6O8LGs',
-  'play_unac_amines': 'Djq88Ndp2A0',
-  'play_unac_living': 'g4J3Wq_S7Fk',
-  'play_unac_phys_journey': 'O3_D7T6z-fE',
-  'play_unac_toppers_ioc': '0_d_D91cDwU',
-  'play_ved_adv_kinematics': '1_W4rW9PUpA',
-  'play_ved_physical_formula': '0_d_D91cDwU',
-  'play_ved_redox': '0_d_D91cDwU',
-  'play_ved_stats': 'z86-ja0PSn0',
-  'play_ved_cell_life': 'g4J3Wq_S7Fk',
-  'play_ved_biotonic_microbes': 'g4J3Wq_S7Fk',
-  'play_neetprep_bio_revision': 'g4J3Wq_S7Fk',
-  'play_neetprep_expected': '9Bv_M6e8858',
-  'play_neetprep_genetics': 'bVbU1E_UqK0',
-  'play_neetprep_rotational': '1_W4rW9PUpA',
-  'play_allen_sir': 'O3_D7T6z-fE',
-  'play_mat_jee2027': 'lA9K8T4Gf7Y',
-  'play_motion_chemical_bonding': '0_d_D91cDwU',
-  'play_motion_electrochemistry': '0_d_D91cDwU',
-  'play_motion_abhyaas_physics': '9Bv_M6e8858',
-  'play_doubtnut_neet_hindi': 'g4J3Wq_S7Fk',
-  'play_aakash_nuclei': '1_W4rW9PUpA',
-  'play_etoos_botany_oneshots': 'bVbU1E_UqK0',
-  'play_learn_thermodynamics': '0_d_D91cDwU',
-  'play_examrace_higher': 'lA9K8T4Gf7Y',
-  'play_atpstar_concepts': 'O3_D7T6z-fE',
-  'play_khan_metals': '0_d_D91cDwU',
-  'play_esaral_complex': 'Djq88Ndp2A0',
-  'play_esaral_neet_prep': 'g4J3Wq_S7Fk',
-  'play_galaxy_rigid': '1_W4rW9PUpA',
-  'play_vora_quadratic': 'Djq88Ndp2A0',
-  'play_apni_goc': '0_d_D91cDwU',
-  'play_biomentors_repeaters': 'g4J3Wq_S7Fk',
-  'play_bewise_goc': '0_d_D91cDwU',
-  'play_ssp_expected': '9Bv_M6e8858'
+const thumbnailCache: Record<string, string> = {};
+const pendingQueries = new Set<string>();
+
+const fetchFirstVideoThumbnail = (playlistId: string) => {
+  if (pendingQueries.has(playlistId)) return;
+  pendingQueries.add(playlistId);
+
+  const resolveFirstId = (docs: any[]): boolean => {
+    const sorted = [...docs].sort((a, b) => {
+      const posA = a.data().position ?? 0;
+      const posB = b.data().position ?? 0;
+      return posA - posB;
+    });
+    const videoData = sorted[0]?.data();
+    const firstVideoId = videoData?.videoId || videoData?.youtubeVideoId || videoData?.id;
+    if (firstVideoId) {
+      const thumbUrl = `https://i.ytimg.com/vi/${firstVideoId}/maxresdefault.jpg`;
+      thumbnailCache[playlistId] = thumbUrl;
+      window.dispatchEvent(new CustomEvent('thumbnail-resolved', { detail: { playlistId, url: thumbUrl } }));
+      return true;
+    }
+    return false;
+  };
+
+  // Try ordered query
+  getDocs(
+    query(
+      collection(db, 'videos'),
+      where('playlistId', '==', playlistId),
+      orderBy('position', 'asc'),
+      limit(10)
+    )
+  )
+    .then((snap) => {
+      if (!snap.empty) {
+        resolveFirstId(snap.docs);
+      } else {
+        // Query without position ordening as backup
+        getDocs(
+          query(
+            collection(db, 'videos'),
+            where('playlistId', '==', playlistId),
+            limit(10)
+          )
+        ).then((snap2) => {
+          if (!snap2.empty) {
+            resolveFirstId(snap2.docs);
+          }
+        }).catch(() => {});
+      }
+    })
+    .catch(() => {
+      // Direct backup query for systems where index is building
+      getDocs(
+        query(
+          collection(db, 'videos'),
+          where('playlistId', '==', playlistId),
+          limit(10)
+        )
+      )
+        .then((snap) => {
+          if (!snap.empty) {
+            resolveFirstId(snap.docs);
+          }
+        })
+        .catch((err) => {
+          console.warn(`Failed resolving thumbnail fallback for playlist ${playlistId}:`, err);
+        });
+    });
 };
 
 export const getPlaylistThumbnail = (playlist: Playlist): string => {
   if (playlist.thumbnailUrl && (playlist.thumbnailUrl.startsWith('http://') || playlist.thumbnailUrl.startsWith('https://'))) {
     return playlist.thumbnailUrl;
   }
-
-  const mappedVideoId = mappings[playlist.id] || (playlist.youtubePlaylistId ? mappings[playlist.youtubePlaylistId] : null);
-  if (mappedVideoId) {
-    return `https://img.youtube.com/vi/${mappedVideoId}/hqdefault.jpg`;
+  if (playlist.thumbnail && (playlist.thumbnail.startsWith('http://') || playlist.thumbnail.startsWith('https://'))) {
+    return playlist.thumbnail;
   }
 
-  const subject = (playlist.subject || 'Physics').toLowerCase();
-  if (subject.includes('biology') || subject.includes('botany') || subject.includes('zoology')) {
-    return `https://img.youtube.com/vi/g4J3Wq_S7Fk/hqdefault.jpg`;
-  } else if (subject.includes('chemistry') || subject.includes('organic') || subject.includes('inorganic')) {
-    return `https://img.youtube.com/vi/0_d_D91cDwU/hqdefault.jpg`;
-  } else if (subject.includes('math') || subject.includes('calc')) {
-    return `https://img.youtube.com/vi/lA9K8T4Gf7Y/hqdefault.jpg`;
+  const playlistId = playlist.id || playlist.playlistId;
+  if (playlistId) {
+    if (thumbnailCache[playlistId]) {
+      return thumbnailCache[playlistId];
+    }
+    fetchFirstVideoThumbnail(playlistId);
   }
-  return `https://img.youtube.com/vi/9Bv_M6e8858/hqdefault.jpg`;
+
+  return 'https://img.youtube.com/vi/9Bv_M6e8858/hqdefault.jpg';
 };
 
 export const getLectureThumbnail = (lec: Lecture): string => {
@@ -74,32 +97,32 @@ export const getLectureThumbnail = (lec: Lecture): string => {
     return lec.thumbnailUrl;
   }
 
-  if (lec.id && lec.id.length === 11 && !lec.id.includes('/') && !lec.id.includes('?')) {
+  const YOUTUBE_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
+  if (!lec.source && (lec.videoUrl?.includes('youtube') || lec.videoUrl?.includes('youtu.be') || YOUTUBE_ID_REGEX.test(lec.id))) {
+    lec.source = 'youtube';
+  }
+
+  if (lec.id && YOUTUBE_ID_REGEX.test(lec.id) && lec.source === 'youtube') {
     return `https://img.youtube.com/vi/${lec.id}/hqdefault.jpg`;
   }
 
   if (lec.videoUrl) {
     const embedMatch = lec.videoUrl.match(/embed\/([^?]+)/);
-    if (embedMatch && embedMatch[1] && embedMatch[1].length === 11) {
+    if (embedMatch && embedMatch[1] && YOUTUBE_ID_REGEX.test(embedMatch[1])) {
       return `https://img.youtube.com/vi/${embedMatch[1]}/hqdefault.jpg`;
     }
     const watchMatch = lec.videoUrl.match(/v=([^&]+)/);
-    if (watchMatch && watchMatch[1] && watchMatch[1].length === 11) {
+    if (watchMatch && watchMatch[1] && YOUTUBE_ID_REGEX.test(watchMatch[1])) {
       return `https://img.youtube.com/vi/${watchMatch[1]}/hqdefault.jpg`;
     }
   }
 
-  if (lec.playlistId && mappings[lec.playlistId]) {
-    return `https://img.youtube.com/vi/${mappings[lec.playlistId]}/hqdefault.jpg`;
+  if (lec.playlistId) {
+    if (thumbnailCache[lec.playlistId]) {
+      return thumbnailCache[lec.playlistId];
+    }
+    fetchFirstVideoThumbnail(lec.playlistId);
   }
 
-  const subject = (lec.subject || 'Physics').toLowerCase();
-  if (subject.includes('biology') || subject.includes('botany') || subject.includes('zoology')) {
-    return `https://img.youtube.com/vi/g4J3Wq_S7Fk/hqdefault.jpg`;
-  } else if (subject.includes('chemistry') || subject.includes('organic') || subject.includes('inorganic')) {
-    return `https://img.youtube.com/vi/0_d_D91cDwU/hqdefault.jpg`;
-  } else if (subject.includes('math') || subject.includes('calc')) {
-    return `https://img.youtube.com/vi/lA9K8T4Gf7Y/hqdefault.jpg`;
-  }
-  return `https://img.youtube.com/vi/9Bv_M6e8858/hqdefault.jpg`;
+  return 'https://img.youtube.com/vi/9Bv_M6e8858/hqdefault.jpg';
 };

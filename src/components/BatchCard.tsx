@@ -35,7 +35,7 @@ export function BatchCard({ batch, onClick }: BatchCardProps) {
       };
     }
     return {
-      gradient: 'from-orange-500 via-amber-600 to-red-800',
+      gradient: 'from-indigo-600 via-slate-800 to-blue-900',
       Icon: GraduationCap,
       label: subject || 'Full Cohort'
     };
@@ -78,7 +78,7 @@ export function BatchCard({ batch, onClick }: BatchCardProps) {
             </span>
           </div>
           
-          <h4 className="text-xs font-bold text-white uppercase tracking-tight line-clamp-1 group-hover:text-amber-400 transition-colors">
+          <h4 className="text-xs font-bold text-white uppercase tracking-tight line-clamp-1 group-hover:text-indigo-400 transition-colors">
             {batch.name}
           </h4>
           <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2 select-text">

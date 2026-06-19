@@ -682,7 +682,7 @@ export default function ContentManagerTab() {
           onClick={() => setCurrentTab('add_channel')}
           className={`flex-1 text-xs py-2.5 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center justify-center gap-1.5 ${
             currentTab === 'add_channel'
-              ? 'bg-orange-500 font-medium text-white shadow-md shadow-orange-500/10'
+              ? 'bg-indigo-600 font-medium text-white shadow-md shadow-indigo-600/10'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
           }`}
         >
@@ -693,7 +693,7 @@ export default function ContentManagerTab() {
           onClick={() => setCurrentTab('channels_list')}
           className={`flex-1 text-xs py-2.5 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center justify-center gap-1.5 ${
             currentTab === 'channels_list'
-              ? 'bg-orange-500 font-medium text-white shadow-md shadow-orange-500/10'
+              ? 'bg-indigo-600 font-medium text-white shadow-md shadow-indigo-600/10'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
           }`}
         >
@@ -704,7 +704,7 @@ export default function ContentManagerTab() {
           onClick={() => setCurrentTab('playlists')}
           className={`flex-1 text-xs py-2.5 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center justify-center gap-1.5 ${
             currentTab === 'playlists'
-              ? 'bg-orange-500 font-medium text-white shadow-md shadow-orange-500/10'
+              ? 'bg-indigo-600 font-medium text-white shadow-md shadow-indigo-600/10'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
           }`}
         >
@@ -715,7 +715,7 @@ export default function ContentManagerTab() {
           onClick={() => setCurrentTab('videos')}
           className={`flex-1 text-xs py-2.5 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center justify-center gap-1.5 ${
             currentTab === 'videos'
-              ? 'bg-orange-500 font-medium text-white shadow-md shadow-orange-500/10'
+              ? 'bg-indigo-600 font-medium text-white shadow-md shadow-indigo-600/10'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
           }`}
         >
@@ -726,7 +726,7 @@ export default function ContentManagerTab() {
           onClick={() => setCurrentTab('sync_logs')}
           className={`flex-1 text-xs py-2.5 rounded-lg font-mono tracking-tight cursor-pointer uppercase transition-all flex items-center justify-center gap-1.5 ${
             currentTab === 'sync_logs'
-              ? 'bg-orange-500 font-medium text-white shadow-md shadow-orange-500/10'
+              ? 'bg-indigo-600 font-medium text-white shadow-md shadow-indigo-600/10'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
           }`}
         >
@@ -742,7 +742,7 @@ export default function ContentManagerTab() {
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-5">
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold tracking-tight text-white flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-orange-500" /> Catalog Verified Channels
+                  <Plus className="w-4 h-4 text-indigo-400" /> Catalog Verified Channels
                 </h3>
                 <p className="text-xs text-zinc-400 font-mono">
                   Introduce new academic channel resources for lecture-item slicing.
@@ -763,7 +763,7 @@ export default function ContentManagerTab() {
                     value={channelInput}
                     onChange={(e) => setChannelInput(e.target.value)}
                     placeholder="https://youtube.com/@PhysicsWallah or @PhysicsWallah"
-                    className="w-full bg-zinc-950 border border-zinc-800 text-sm py-2.5 px-3.5 rounded-lg text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-orange-500/50 transition-colors"
+                    className="w-full bg-zinc-950 border border-zinc-800 text-sm py-2.5 px-3.5 rounded-lg text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
                   />
                 </div>
 
@@ -782,7 +782,7 @@ export default function ContentManagerTab() {
                           onClick={() => handleSubjectToggle(sub)}
                           className={`text-xs px-3 py-1.5 rounded-full font-mono transition-all border cursor-pointer ${
                             isActive
-                              ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 font-medium'
+                              ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40 font-medium'
                               : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:border-zinc-700'
                           }`}
                         >
@@ -808,7 +808,7 @@ export default function ContentManagerTab() {
                           onClick={() => handleExamToggle(ex)}
                           className={`text-xs px-3 py-1.5 rounded-full font-mono transition-all border cursor-pointer ${
                             isActive
-                              ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 font-medium'
+                              ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40 font-medium'
                               : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:border-zinc-700'
                           }`}
                         >
@@ -824,7 +824,7 @@ export default function ContentManagerTab() {
                   id="btn-submit-import-channel"
                   type="submit"
                   disabled={isAddingChannel}
-                  className="w-full py-3 rounded-lg text-xs font-mono font-medium tracking-wide uppercase bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 rounded-lg text-xs font-mono font-medium tracking-wide uppercase bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAddingChannel ? (
                     <>
@@ -868,12 +868,12 @@ export default function ContentManagerTab() {
                       {/* Step 1: Resolved Channel */}
                       <div className="flex items-start gap-2">
                         {importStatusStep === 'searching' ? (
-                          <RefreshCw className="w-3.5 h-3.5 text-orange-500 animate-spin shrink-0 mt-0.5" />
+                          <RefreshCw className="w-3.5 h-3.5 text-indigo-450 animate-spin shrink-0 mt-0.5" />
                         ) : (
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                         )}
                         <div>
-                          <p className={importStatusStep === 'searching' ? 'text-orange-400' : 'text-zinc-300'}>
+                          <p className={importStatusStep === 'searching' ? 'text-indigo-400' : 'text-zinc-300'}>
                             {importStatusStep === 'searching' ? 'Resolving channel credentials from YouTube API...' : '✅ Channel found and registered.'}
                           </p>
                           {importFoundChannel && (
@@ -989,7 +989,7 @@ export default function ContentManagerTab() {
             <button
               onClick={handleSyncAllChannels}
               disabled={isSyncingAll || channels.length === 0}
-              className="px-4 py-2 rounded-lg text-xs font-mono font-medium tracking-tight bg-zinc-950 text-orange-400 border border-orange-500/20 hover:border-orange-500/40 hover:bg-zinc-900 cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
+              className="px-4 py-2 rounded-lg text-xs font-mono font-medium tracking-tight bg-zinc-950 text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/40 hover:bg-zinc-900 cursor-pointer transition-all flex items-center gap-1.5 disabled:opacity-50"
             >
               {isSyncingAll ? (
                 <>
@@ -1072,7 +1072,7 @@ export default function ContentManagerTab() {
                           <button
                             onClick={() => handleSyncChannel(chan.id, chan.channelName)}
                             disabled={syncingChannelId === chan.id}
-                            className="px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 text-orange-400 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                            className="px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 text-indigo-400 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                           >
                             {syncingChannelId === chan.id ? 'Syncing...' : 'Sync Now'}
                           </button>
@@ -1116,7 +1116,7 @@ export default function ContentManagerTab() {
                 placeholder="Search playlists by title..."
                 value={playlistsSearch}
                 onChange={(e) => setPlaylistsSearch(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 pl-9 pr-4 rounded-lg text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 pl-9 pr-4 rounded-lg text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50"
               />
             </div>
 
@@ -1126,7 +1126,7 @@ export default function ContentManagerTab() {
                 id="playlists-channel-select"
                 value={playlistsChannelFilter}
                 onChange={(e) => setPlaylistsChannelFilter(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-indigo-500/50"
               >
                 <option value="all">Channels: All</option>
                 {channels.map(c => (
@@ -1141,7 +1141,7 @@ export default function ContentManagerTab() {
                 id="playlists-subject-select"
                 value={playlistsSubjectFilter}
                 onChange={(e) => setPlaylistsSubjectFilter(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-indigo-500/50"
               >
                 <option value="all">Subjects: All</option>
                 {SUBJECT_OPTIONS.map(s => (
@@ -1155,7 +1155,7 @@ export default function ContentManagerTab() {
               <select
                 value={playlistsExamFilter}
                 onChange={(e) => setPlaylistsExamFilter(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-indigo-500/50"
               >
                 <option value="all">Exams: All</option>
                 {EXAM_OPTIONS.map(e => (
@@ -1221,7 +1221,7 @@ export default function ContentManagerTab() {
                           {pl.lecturesCount || pl.videoCount || 0}
                         </td>
                         <td className="py-3 px-4">
-                          <span className="text-[10px] font-mono bg-zinc-950 font-semibold text-orange-400 border border-orange-500/10 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-mono bg-zinc-950 font-semibold text-indigo-400 border border-indigo-500/10 px-2 py-0.5 rounded-full">
                             {pl.subject || 'Biology'}
                           </span>
                         </td>
@@ -1249,7 +1249,7 @@ export default function ContentManagerTab() {
                           <div className="flex justify-end gap-1.5 text-[10px] font-mono">
                             <button
                               onClick={() => handleOpenPlaylistVideos(pl)}
-                              className="px-2 py-1 rounded bg-zinc-950 hover:bg-zinc-800 text-orange-400 border border-zinc-800 cursor-pointer shrink-0 transition-colors"
+                              className="px-2 py-1 rounded bg-zinc-950 hover:bg-zinc-800 text-indigo-400 border border-zinc-800 cursor-pointer shrink-0 transition-colors"
                             >
                               View Videos
                             </button>
@@ -1302,7 +1302,7 @@ export default function ContentManagerTab() {
                 placeholder="Search lectures by title or topic..."
                 value={videosSearch}
                 onChange={(e) => setVideosSearch(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 pl-9 pr-4 rounded-lg text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 pl-9 pr-4 rounded-lg text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50"
               />
             </div>
 
@@ -1315,7 +1315,7 @@ export default function ContentManagerTab() {
                   setVideosChannelFilter(e.target.value);
                   setVideosPlaylistFilter('all'); // reset playlist
                 }}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-indigo-500/50"
               >
                 <option value="all">Channels: All</option>
                 {channels.map(c => (
@@ -1330,7 +1330,7 @@ export default function ContentManagerTab() {
                 id="videos-playlist-select"
                 value={videosPlaylistFilter}
                 onChange={(e) => setVideosPlaylistFilter(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-indigo-500/50"
               >
                 <option value="all">Playlists: All</option>
                 {playlists
@@ -1347,7 +1347,7 @@ export default function ContentManagerTab() {
                 id="videos-subject-select"
                 value={videosSubjectFilter}
                 onChange={(e) => setVideosSubjectFilter(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-orange-500/50"
+                className="w-full bg-zinc-950 border border-zinc-850 py-2 px-3 rounded-lg text-xs font-mono text-zinc-400 focus:outline-none focus:border-indigo-500/50"
               >
                 <option value="all">Subjects: All</option>
                 {SUBJECT_OPTIONS.map(s => (
@@ -1359,13 +1359,13 @@ export default function ContentManagerTab() {
 
           {/* Bulk operation header widget (Sticky visual bar!) */}
           {selectedVideoIds.length > 0 && (
-            <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between gap-4 animate-fadeIn">
+            <div className="bg-indigo-550/10 border border-indigo-500/20 p-4 rounded-xl flex items-center justify-between gap-4 animate-fadeIn">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded bg-orange-500 text-white shrink-0">
+                <div className="p-1.5 rounded bg-indigo-600 text-white shrink-0">
                   <Database className="w-3.5 h-3.5" />
                 </div>
                 <p className="text-xs font-mono text-white">
-                  <span className="font-bold text-orange-400">{selectedVideoIds.length}</span> lectures selected for administrative batch operations.
+                  <span className="font-bold text-indigo-400">{selectedVideoIds.length}</span> lectures selected for administrative batch operations.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -1416,7 +1416,7 @@ export default function ContentManagerTab() {
                         type="checkbox"
                         checked={isAllFilteredSelected}
                         onChange={(e) => handleSelectAllFilteredVideos(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded border-zinc-800 text-orange-500 focus:ring-0 cursor-pointer bg-zinc-950"
+                        className="w-3.5 h-3.5 rounded border-zinc-800 text-indigo-550 focus:ring-0 cursor-pointer bg-zinc-950"
                       />
                     </th>
                     <th className="py-3 px-4">Thumbnail</th>
@@ -1436,7 +1436,7 @@ export default function ContentManagerTab() {
                       <tr 
                         key={video.id} 
                         className={`hover:bg-zinc-800/15 transition-all ${
-                          isSelected ? 'bg-orange-500/5' : ''
+                          isSelected ? 'bg-indigo-500/5' : ''
                         }`}
                       >
                         <td className="py-3 px-4">
@@ -1444,7 +1444,7 @@ export default function ContentManagerTab() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleSelectVideo(video.id)}
-                            className="w-3.5 h-3.5 rounded border-zinc-800 text-orange-500 focus:ring-0 cursor-pointer bg-zinc-950"
+                            className="w-3.5 h-3.5 rounded border-zinc-800 text-indigo-400 focus:ring-0 cursor-pointer bg-zinc-950"
                           />
                         </td>
                         <td className="py-3 px-4">
@@ -1464,7 +1464,7 @@ export default function ContentManagerTab() {
                           <div>
                             <p 
                               onClick={() => handlePreviewVideo(video.videoId)}
-                              className="font-semibold text-white truncate hover:text-orange-400 cursor-pointer block leading-normal"
+                              className="font-semibold text-white truncate hover:text-indigo-400 cursor-pointer block leading-normal"
                             >
                               {video.title}
                             </p>
@@ -1479,7 +1479,7 @@ export default function ContentManagerTab() {
                         </td>
                         <td className="py-3 px-4">
                           <div>
-                            <span className="text-[9px] font-mono font-semibold bg-zinc-950 text-orange-400 border border-orange-500/10 px-1.5 py-0.5 rounded">
+                            <span className="text-[9px] font-mono font-semibold bg-zinc-950 text-indigo-400 border border-indigo-500/10 px-1.5 py-0.5 rounded">
                               {video.subject || 'Biology'}
                             </span>
                             {video.topic && (
@@ -1506,7 +1506,7 @@ export default function ContentManagerTab() {
                             </button>
                             <button
                               onClick={() => handleEditVideoMetadata(video)}
-                              className="p-1 rounded text-zinc-400 hover:text-orange-400 transition-colors cursor-pointer"
+                              className="p-1 rounded text-zinc-400 hover:text-indigo-400 transition-colors cursor-pointer"
                               title="Edit Metadata"
                             >
                               <Edit className="w-4 h-4" />
@@ -1549,7 +1549,7 @@ export default function ContentManagerTab() {
             {/* Quota Progress Bar */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3 md:col-span-2">
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-zinc-400 flex items-center gap-1.5"><Database className="w-3.5 h-3.5 text-orange-500" /> Today's YouTube API Unit Usage</span>
+                <span className="text-zinc-400 flex items-center gap-1.5"><Database className="w-3.5 h-3.5 text-indigo-455" /> Today's YouTube API Unit Usage</span>
                 <span className="text-white font-semibold">{quotaStats.todayUsed.toLocaleString()} / {quotaStats.quotaLimit.toLocaleString()} units</span>
               </div>
               <div className="w-full bg-zinc-950 rounded-full h-3 overflow-hidden border border-zinc-850 p-0.5">
@@ -1558,7 +1558,7 @@ export default function ContentManagerTab() {
                     (quotaStats.todayUsed / quotaStats.quotaLimit) > 0.85 
                       ? 'bg-rose-500' 
                       : (quotaStats.todayUsed / quotaStats.quotaLimit) > 0.5 
-                      ? 'bg-orange-500' 
+                      ? 'bg-indigo-500' 
                       : 'bg-emerald-500'
                   }`}
                   style={{ width: `${(quotaStats.todayUsed / quotaStats.quotaLimit) * 100}%` }}
@@ -1586,7 +1586,7 @@ export default function ContentManagerTab() {
             <div className="border-b border-zinc-800 pb-3 flex justify-between items-center">
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold tracking-tight text-white flex items-center gap-1.5">
-                  <History className="w-4 h-4 text-orange-500" /> Synchronization Activity Feed
+                  <History className="w-4 h-4 text-indigo-455" /> Synchronization Activity Feed
                 </h3>
                 <p className="text-xs text-zinc-400 font-mono">Detailed records of indexing routines.</p>
               </div>
@@ -1623,7 +1623,7 @@ export default function ContentManagerTab() {
                         <td className="py-3 px-4 font-bold max-w-[100px] truncate">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-mono ${
                             log.type === 'channel' 
-                              ? 'bg-orange-500/10 text-orange-400' 
+                              ? 'bg-indigo-500/10 text-indigo-400' 
                               : log.type === 'playlist' 
                               ? 'bg-indigo-500/10 text-indigo-400' 
                               : log.type === 'channel_delete'
@@ -1715,7 +1715,7 @@ export default function ContentManagerTab() {
                             setSelectedPlaylistForVideos(null);
                             setPreviewVideoId(vid.videoId);
                           }}
-                          className="text-xs font-semibold text-white truncate hover:text-orange-400 cursor-pointer"
+                          className="text-xs font-semibold text-white truncate hover:text-indigo-400 cursor-pointer"
                         >
                           {vid.title}
                         </p>
@@ -1728,7 +1728,7 @@ export default function ContentManagerTab() {
                           setSelectedPlaylistForVideos(null);
                           setPreviewVideoId(vid.videoId);
                         }}
-                        className="p-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-orange-400 shrink-0 cursor-pointer"
+                        className="p-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-indigo-400 shrink-0 cursor-pointer"
                       >
                         <Play className="w-3.5 h-3.5" />
                       </button>
@@ -1854,7 +1854,7 @@ export default function ContentManagerTab() {
                   <select
                     value={editSubject}
                     onChange={(e) => setEditSubject(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-850 py-2.5 px-3 rounded-lg text-white font-mono focus:outline-none focus:border-orange-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-850 py-2.5 px-3 rounded-lg text-white font-mono focus:outline-none focus:border-indigo-500/50"
                   >
                     {SUBJECT_OPTIONS.map(s => (
                       <option key={s} value={s}>{s}</option>
@@ -1870,7 +1870,7 @@ export default function ContentManagerTab() {
                     value={editTopic}
                     onChange={(e) => setEditTopic(e.target.value)}
                     placeholder="e.g. Mitochondria & Cell Membrane"
-                    className="w-full bg-zinc-950 border border-zinc-850 py-2.5 px-3 rounded-lg text-white font-mono focus:outline-none focus:border-orange-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-850 py-2.5 px-3 rounded-lg text-white font-mono focus:outline-none focus:border-indigo-500/50"
                   />
                 </div>
 
@@ -1882,7 +1882,7 @@ export default function ContentManagerTab() {
                     value={editExamTagsString}
                     onChange={(e) => setEditExamTagsString(e.target.value)}
                     placeholder="NEET, NEET 2025"
-                    className="w-full bg-zinc-950 border border-zinc-850 py-2.5 px-3 rounded-lg text-white font-mono focus:outline-none focus:border-orange-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-850 py-2.5 px-3 rounded-lg text-white font-mono focus:outline-none focus:border-indigo-500/50"
                   />
                 </div>
 
@@ -1896,7 +1896,7 @@ export default function ContentManagerTab() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-lg transition-colors cursor-pointer"
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg transition-colors cursor-pointer"
                   >
                     Save Changes
                   </button>

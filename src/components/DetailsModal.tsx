@@ -432,9 +432,9 @@ export default function DetailsModal({
                   <div className="bg-brand-black border border-brand-border rounded-xl p-4 min-w-[200px] text-center md:text-right space-y-1">
                     <span className="block text-[10px] font-mono text-brand-gray uppercase">Aggregate Score</span>
                     {dynamicAverageRating ? (
-                      <span className="text-3xl font-display font-bold text-brand-accent">{dynamicAverageRating}★</span>
+                      <span className="text-3xl font-display font-bold text-[#FFEFD5]">{dynamicAverageRating}★</span>
                     ) : (
-                      <span className="text-sm font-mono font-medium text-amber-500 block uppercase tracking-wide">No ratings yet</span>
+                      <span className="text-sm font-mono font-medium text-[#FFEFD5] block uppercase tracking-wide">No ratings yet</span>
                     )}
                     <span className="block text-[10px] font-mono text-brand-gray uppercase mt-1">Review Volume</span>
                     <span className="text-sm font-mono font-medium text-brand-accent">{dynamicRatingCount} Student reviews</span>
@@ -449,7 +449,7 @@ export default function DetailsModal({
                     <h3 className="text-xs font-mono font-bold text-brand-accent uppercase tracking-wider flex items-center gap-1">
                       <Award className="w-4 h-4" /> Explainable Trust Indicators 
                       {(!trustBreakdown || trustBreakdown.totalScore === null || trustBreakdown.totalScore === undefined || trustBreakdown.partial) ? (
-                        <span className="text-orange-400 font-mono ml-1 font-semibold">(Not enough data yet)</span>
+                        <span className="text-indigo-400 font-mono ml-1 font-semibold">(Not enough data yet)</span>
                       ) : (
                         <span className="text-brand-accent font-mono ml-1">({trustBreakdown.totalScore}/100)</span>
                       )}
@@ -462,7 +462,7 @@ export default function DetailsModal({
                   </div>
 
                   {(!trustBreakdown || trustBreakdown.partial) && (
-                    <p className="text-[10px] text-zinc-400 font-mono italic leading-relaxed bg-[#1A1A1A]/40 border border-brand-border/45 p-3 rounded-lg text-left">
+                    <p className="text-[10px] text-zinc-400 font-mono italic leading-relaxed bg-[#1A1A22]/40 border border-brand-border/45 p-3 rounded-lg text-left">
                       ⚠️ This educator has some partial or missing input signals (such as client watch metrics or reviews). Missing indicators contribute exactly 0, and the score is marked partial. "Not enough data yet" is shown instead of a manufactured standard rating.
                     </p>
                   )}
@@ -475,7 +475,7 @@ export default function DetailsModal({
                           <span className="text-white">{trustBreakdown.profileCompleteness}/3</span>
                         </div>
                         <div className="h-1 bg-brand-border rounded-full overflow-hidden">
-                          <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-full" style={{ width: `${(trustBreakdown.profileCompleteness / 3) * 100}%` }} />
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-450 h-full" style={{ width: `${(trustBreakdown.profileCompleteness / 3) * 100}%` }} />
                         </div>
                       </div>
 
@@ -485,7 +485,7 @@ export default function DetailsModal({
                           <span className="text-white">{trustBreakdown.officialLinksScore}/2</span>
                         </div>
                         <div className="h-1 bg-brand-border rounded-full overflow-hidden">
-                          <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-full" style={{ width: `${(trustBreakdown.officialLinksScore / 2) * 100}%` }} />
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-450 h-full" style={{ width: `${(trustBreakdown.officialLinksScore / 2) * 100}%` }} />
                         </div>
                       </div>
 
@@ -495,7 +495,7 @@ export default function DetailsModal({
                           <span className="text-white">{trustBreakdown.reviewReliability}/40</span>
                         </div>
                         <div className="h-1 bg-brand-border rounded-full overflow-hidden">
-                          <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-full" style={{ width: `${(trustBreakdown.reviewReliability / 40) * 100}%` }} />
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-450 h-full" style={{ width: `${(trustBreakdown.reviewReliability / 40) * 100}%` }} />
                         </div>
                       </div>
 
@@ -505,7 +505,7 @@ export default function DetailsModal({
                           <span className="text-white">{trustBreakdown.contentConsistency}/1</span>
                         </div>
                         <div className="h-1 bg-brand-border rounded-full overflow-hidden">
-                          <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-full" style={{ width: `${(trustBreakdown.contentConsistency / 1) * 100}%` }} />
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-450 h-full" style={{ width: `${(trustBreakdown.contentConsistency / 1) * 100}%` }} />
                         </div>
                       </div>
 
@@ -515,7 +515,7 @@ export default function DetailsModal({
                           <span className="text-white">{trustBreakdown.communityEngagement || 0}/40</span>
                         </div>
                         <div className="h-1 bg-brand-border rounded-full overflow-hidden">
-                          <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-full" style={{ width: `${(((trustBreakdown.communityEngagement || 0) / 40) * 100)}%` }} />
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-450 h-full" style={{ width: `${(((trustBreakdown.communityEngagement || 0) / 40) * 100)}%` }} />
                         </div>
                       </div>
 
@@ -525,7 +525,7 @@ export default function DetailsModal({
                           <span className="text-white">{trustBreakdown.verifiedCredentials || 0}/14</span>
                         </div>
                         <div className="h-1 bg-brand-border rounded-full overflow-hidden">
-                          <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-full" style={{ width: `${(((trustBreakdown.verifiedCredentials || 0) / 14) * 100)}%` }} />
+                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-450 h-full" style={{ width: `${(((trustBreakdown.verifiedCredentials || 0) / 14) * 100)}%` }} />
                         </div>
                       </div>
                     </div>
@@ -617,12 +617,12 @@ export default function DetailsModal({
                             <User className="w-4 h-4 text-brand-gray" />
                             <span className="text-xs font-medium text-brand-accent font-sans">{r.userDisplayName}</span>
                             {r.isVerifiedStudent && (
-                              <span className="text-[8px] font-mono uppercase bg-neutral-800 text-emerald-400 px-1 py-0.2 rounded font-bold">
+                              <span className="text-[8px] font-mono uppercase bg-neutral-800 text-[#A9C0E0] px-1 py-0.2 rounded font-bold">
                                 Verified Candidate
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-0.5 text-amber-500 font-mono text-xs font-bold bg-brand-dark px-2 py-0.5 rounded">
+                          <div className="flex items-center gap-0.5 text-[#FFEFD5] font-mono text-xs font-bold bg-brand-dark px-2 py-0.5 rounded">
                             {r.rating}★
                           </div>
                         </div>

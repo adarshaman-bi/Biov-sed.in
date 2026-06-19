@@ -186,7 +186,7 @@ export default function SearchSpecsModal({
                   <div className="space-y-2">
                     <label className="block text-[10.5px] uppercase font-mono font-bold text-zinc-400 tracking-wider flex items-center justify-between">
                       <span>Minimum Rating</span>
-                      <span className="text-[#FF5A1F] font-mono">{testMinRating ? `${testMinRating}★+` : 'Any rating'}</span>
+                      <span className="text-[#FFEFD5] font-mono">{testMinRating ? `${testMinRating}★+` : 'Any rating'}</span>
                     </label>
                     <input
                       type="range"
@@ -195,7 +195,7 @@ export default function SearchSpecsModal({
                       step="0.5"
                       value={testMinRating}
                       onChange={(e) => setTestMinRating && setTestMinRating(parseFloat(e.target.value))}
-                      className="w-full accent-[#FF5A1F] cursor-pointer h-1.5 bg-zinc-900 rounded-lg outline-none"
+                      className="w-full accent-white cursor-pointer h-1.5 bg-zinc-900 rounded-lg outline-none"
                     />
                     <div className="flex justify-between text-[9px] font-mono text-zinc-650 leading-none">
                       <span>Any rating</span>
@@ -311,7 +311,7 @@ export default function SearchSpecsModal({
                   <div className="flex items-center justify-between p-3.5 bg-zinc-950/40 border border-[#1f1f1f] rounded-xl text-left">
                     <div className="space-y-0.5">
                       <span className="block text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                        <Award className="w-4 h-4 text-emerald-400" /> Verified Only mode
+                        <Award className="w-4 h-4 text-indigo-400" /> Verified Only mode
                       </span>
                       <span className="block text-[10px] text-zinc-500 font-mono leading-tight">
                         Hides any sources with unverified or pending review metrics.
@@ -321,7 +321,7 @@ export default function SearchSpecsModal({
                       type="button"
                       onClick={() => setVerifiedOnly(!verifiedOnly)}
                       className={`w-11 h-6 rounded-full flex items-center p-1 cursor-pointer transition-all ${
-                        verifiedOnly ? 'bg-emerald-500 justify-end' : 'bg-neutral-800 justify-start'
+                        verifiedOnly ? 'bg-indigo-600 justify-end' : 'bg-neutral-800 justify-start'
                       }`}
                     >
                       <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-md" />

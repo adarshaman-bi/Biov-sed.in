@@ -14,7 +14,7 @@ interface DynamicRatingProps {
 export const DynamicRating: React.FC<DynamicRatingProps> = ({
   targetId,
   className = "flex items-center gap-1 text-xs font-mono text-zinc-400",
-  starClassName = "text-amber-500 font-sans",
+  starClassName = "text-[#FFEFD5] font-sans",
   textClassName = "text-zinc-500 uppercase",
   hideCount = false,
   onStatsFetched

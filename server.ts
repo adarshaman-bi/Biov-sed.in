@@ -352,9 +352,9 @@ app.get('/api/youtube/playlists', async (req, res) => {
       const chConf = VERIFIED_CHANNELS.find(c => c.id === channelId);
       return {
         id: item.id,
-        title: item.snippet.title,
-        description: item.snippet.description || 'Verified course chapter playlist.',
-        thumbnailUrl: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
+        title: item.snippet?.title || 'Academic Course Series',
+        description: item.snippet?.description || 'Verified course chapter playlist.',
+        thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
         lecturesCount: item.contentDetails?.itemCount || 0,
         subject: chConf?.exams.includes('NEET') && !chConf?.exams.includes('JEE') ? 'Chemistry' : 'Physics', // Smart defaults
         examType: chConf?.exams[0] || 'Both',
@@ -1106,7 +1106,26 @@ app.get('/api/youtube/admin-channels', async (req, res) => {
     let channels: any[] = [];
     if (adminDb) {
       const snap = await adminDb.collection('channels').orderBy('addedAt', 'desc').get();
-      channels = snap.docs.map(doc => doc.data());
+      channels = snap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: data.id || doc.id,
+          channelId: data.channelId || data.id || doc.id,
+          channelName: data.channelName || 'Verified Educator',
+          channelHandle: data.channelHandle || '@Educator',
+          channelThumbnail: data.channelThumbnail || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=100&auto=format&fit=crop&q=80',
+          bannerUrl: data.bannerUrl || null,
+          subscriberCount: data.subscriberCount || 0,
+          description: data.description || 'Academic channel added to Biovised catalog.',
+          addedBy: data.addedBy || 'admin@biovised.com',
+          addedAt: data.addedAt || new Date().toISOString(),
+          lastSynced: data.lastSynced || new Date().toISOString(),
+          isActive: data.isActive !== undefined ? data.isActive : true,
+          tags: data.tags || ['NEET'],
+          totalVideos: data.totalVideos || 0,
+          totalPlaylists: data.totalPlaylists || 0
+        };
+      });
     }
 
     if (channels.length === 0) {
@@ -1118,6 +1137,7 @@ app.get('/api/youtube/admin-channels', async (req, res) => {
         channelHandle: ch.id === 'UCY9p2idnIn-P9tUfshW_bOQ' ? '@RituRattewal' : 
                        ch.id === 'UC3Isk_gSgXg9aV6YAn_x0_w' ? '@PhysicsWallah' : '@Educator',
         channelThumbnail: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=100&auto=format&fit=crop&q=80',
+        bannerUrl: null,
         subscriberCount: 2500000,
         description: 'Quality exam preparation resources curated for Biovised NEET prep.',
         addedBy: 'admin@biovised.com',
@@ -1150,6 +1170,7 @@ app.post('/api/youtube/channels', async (req, res) => {
   let channelName = 'Verified Educator';
   let channelHandle = handleOrId.startsWith('@') ? handleOrId : `@${handleOrId}`;
   let channelThumbnail = 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=100&auto=format&fit=crop&q=80';
+  let bannerUrl: string | null = null;
   let description = 'Academic channel added to Biovised catalog.';
   let subscriberCount = 1850000;
   let totalVideos = 840;
@@ -1165,11 +1186,11 @@ app.post('/api/youtube/channels', async (req, res) => {
         // Resolve channel via YouTube API v3
         let ytUrl = '';
         if (channelId.startsWith('UC') && channelId.length >= 24) {
-          ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+          ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
         } else {
           // Resolve custom handle
           const cleanHandle = channelId.startsWith('@') ? channelId.substring(1) : channelId;
-          ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&forHandle=${cleanHandle}&key=${apiKey}`;
+          ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&forHandle=${cleanHandle}&key=${apiKey}`;
         }
 
         const ytRes = await fetch(ytUrl);
@@ -1181,6 +1202,7 @@ app.post('/api/youtube/channels', async (req, res) => {
             channelName = item.snippet?.title || channelName;
             channelHandle = item.snippet?.customUrl || channelHandle;
             channelThumbnail = item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || channelThumbnail;
+            bannerUrl = item.brandingSettings?.image?.bannerExternalUrl || null;
             description = item.snippet?.description || description;
             subscriberCount = parseInt(item.statistics?.subscriberCount || '0') || subscriberCount;
             totalVideos = parseInt(item.statistics?.videoCount || '0') || totalVideos;
@@ -1218,6 +1240,7 @@ app.post('/api/youtube/channels', async (req, res) => {
       channelName,
       channelHandle,
       channelThumbnail,
+      bannerUrl,
       subscriberCount,
       description,
       addedBy: 'admin@biovised.com',
@@ -1356,7 +1379,7 @@ app.post('/api/youtube/playlists/sync', async (req, res) => {
             channelName,
             title: item.snippet?.title || 'Academic Course Series',
             description: item.snippet?.description || 'Verified course chapter playlist.',
-            thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
+            thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
             lecturesCount: item.contentDetails?.itemCount || 0,
             createdAt: new Date().toISOString(),
             isActive: true,
@@ -1931,8 +1954,44 @@ class InMemorySearchIndex {
     ];
 
     this.batches = [
-      { id: 'lakshya_jee_2026', name: 'Lakshya JEE 2026 Batch', description: 'Yearlong complete syllabus batch for engineering aspirants targeting top IIT/NIT admissions.', subject: 'Physics', examType: 'JEE', price: 4500, discountCode: 'STUDYJEE' },
-      { id: 'yakeen_neet_2026', name: 'Yakeen NEET Dropper Batch', description: 'Ultimate intensive syllabus tracking for medical aspirants aiming for standard scores.', subject: 'Biology', examType: 'NEET', price: 4200, discountCode: 'STUDYNEET' }
+      { 
+        id: 'lakshya_jee_2026', 
+        name: 'Lakshya JEE 2026 Batch', 
+        description: 'Yearlong complete syllabus batch for engineering aspirants targeting top IIT/NIT admissions.', 
+        subject: 'Physics', 
+        examType: 'JEE', 
+        price: 4500, 
+        discountCode: 'STUDYJEE',
+        couponCode: null,
+        link: null,
+        instituteId: 'pw',
+        instituteName: 'Physics Wallah',
+        teachers: ['Alakh Pandey'],
+        startDate: new Date().toISOString(),
+        endDate: new Date().toISOString(),
+        verified: true,
+        createdAt: new Date().toISOString(),
+        imageUrl: null
+      },
+      { 
+        id: 'yakeen_neet_2026', 
+        name: 'Yakeen NEET Dropper Batch', 
+        description: 'Ultimate intensive syllabus tracking for medical aspirants aiming for standard scores.', 
+        subject: 'Biology', 
+        examType: 'NEET', 
+        price: 4200, 
+        discountCode: 'STUDYNEET',
+        couponCode: null,
+        link: null,
+        instituteId: 'pw',
+        instituteName: 'Physics Wallah',
+        teachers: ['Ritu Rattewal'],
+        startDate: new Date().toISOString(),
+        endDate: new Date().toISOString(),
+        verified: true,
+        createdAt: new Date().toISOString(),
+        imageUrl: null
+      }
     ];
 
     this.institutes = [

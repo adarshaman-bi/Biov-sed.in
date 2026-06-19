@@ -546,6 +546,9 @@ function AppContent() {
   const [serverSearchResults, setServerSearchResults] = useState<any[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
+  const [isLabourIllusionActive, setIsLabourIllusionActive] = useState(false);
+  const [labourStatusMessage, setLabourStatusMessage] = useState('');
+  const [labourProgress, setLabourProgress] = useState(0);
   const [searchedExternal, setSearchedExternal] = useState(false);
   const [externalCount, setExternalCount] = useState(0);
 
@@ -585,6 +588,7 @@ function AppContent() {
       setSearchSuggestions([]);
       setSearchedExternal(false);
       setExternalCount(0);
+      setIsLabourIllusionActive(false);
       return;
     }
 
@@ -598,16 +602,49 @@ function AppContent() {
       })
       .catch(err => console.warn('Suggestions fetch failed:', err));
 
+    let illusionTimers: NodeJS.Timeout[] = [];
+
     // Debounced search result query with parameters (implementing Sequence 1-5 from requirement 5.1)
     const timeoutId = setTimeout(() => {
       setIsSearchingServer(true);
+      setIsLabourIllusionActive(true);
+      setLabourProgress(10);
+      setLabourStatusMessage("Querying NEET/JEE indexed catalog databases...");
+
+      let finalResults: any[] = [];
+      let extSearched = false;
+      let extCount = 0;
+
+      // Start the simulated labour stages (1-2s total illusion)
+      const steps = [
+        { delay: 300, progress: 35, msg: "Auditing direct Firebase security rules and connections..." },
+        { delay: 650, progress: 65, msg: "Analyzing verified teacher credentials & authority ratings..." },
+        { delay: 1000, progress: 90, msg: "Mapping matching content playlist records..." },
+        { delay: 1350, progress: 100, msg: "Resolving verified content feed matching..." }
+      ];
+
+      steps.forEach(step => {
+        const t = setTimeout(() => {
+          setLabourProgress(step.progress);
+          setLabourStatusMessage(step.msg);
+          if (step.progress === 100) {
+            // Releasing the buffered results to the visual state
+            setIsLabourIllusionActive(false);
+            setServerSearchResults(finalResults);
+            setSearchedExternal(extSearched);
+            setExternalCount(extCount);
+          }
+        }, step.delay);
+        illusionTimers.push(t);
+      });
+
       fetch(`/api/search/global?q=${encodeURIComponent(searchQuery)}&examType=${examFilter}&subject=${subjectFilter}&contentType=${contentTypeFilter}&activeTab=${activeExploreTab || 'home'}`)
         .then(res => res.json())
         .then(data => {
           if (data.status === 'ok') {
-            setServerSearchResults(data.results || []);
-            setSearchedExternal(data.searchedExternal || false);
-            setExternalCount(data.externalCount || 0);
+            finalResults = data.results || [];
+            extSearched = data.searchedExternal || false;
+            extCount = data.externalCount || 0;
           }
         })
         .catch(err => console.error('[Global Search Sync Failed]:', err))
@@ -616,7 +653,10 @@ function AppContent() {
         });
     }, 250);
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      illusionTimers.forEach(clearTimeout);
+    };
   }, [searchQuery, examFilter, subjectFilter, contentTypeFilter, activeExploreTab]);
 
   // Trigger splash screen timer & force redirect on finish when auth loading is resolved
@@ -1069,14 +1109,14 @@ function AppContent() {
           </div>
           <div className="flex flex-col items-center gap-1.5 animate-pulse">
             <span className="text-xs font-mono font-bold text-white uppercase tracking-widest">Opening Playlist Channel</span>
-            <span className="text-[10px] font-mono text-[#2DD4BF] uppercase tracking-wider">Syncing Lecture Nodes via YouTube API</span>
+            <span className="text-[10px] font-mono text-white uppercase tracking-wider">Syncing Lecture Nodes via YouTube API</span>
           </div>
           <div className="w-32 h-[1px] bg-neutral-900 relative overflow-hidden rounded-full mt-2">
             <motion.div
               initial={{ x: "-100%" }}
               animate={{ x: "100%" }}
               transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute left-0 top-0 bottom-0 w-12 bg-emerald-400 rounded-full"
+              className="absolute left-0 top-0 bottom-0 w-12 bg-white rounded-full"
             />
           </div>
         </div>
@@ -1126,7 +1166,7 @@ function AppContent() {
             <div className="max-w-7xl mx-auto px-4 py-5 md:px-8 space-y-4 text-left">
               <div className="flex justify-between items-center pb-2 border-b border-[#141414]">
                 <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 flex-row">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
                   {activeExploreTab === 'tests' 
                     ? 'Target test matrix variables' 
                     : `Filter profile: ${activeExploreTab?.toUpperCase()}`
@@ -1146,7 +1186,7 @@ function AppContent() {
                       setContentTypeFilter('All');
                     }
                   }}
-                  className="text-[10px] font-mono font-bold text-[#FF5A1F] hover:underline uppercase cursor-pointer"
+                  className="text-[10px] font-mono font-bold text-[#EEEEEE] hover:underline uppercase cursor-pointer"
                 >
                   Reset Parameters
                 </button>
@@ -1364,6 +1404,64 @@ function AppContent() {
                 <div className="flex flex-col items-center justify-center py-20 text-zinc-700 font-mono text-center select-none">
                   {/* Absolute clean void - zero logs, history or clutter as requested */}
                 </div>
+              ) : isLabourIllusionActive ? (
+                /* High-fidelity Emil Kowalski Style Search Labour Illusion Component */
+                <div className="py-12 px-6 bg-brand-dark/40 border border-brand-border/40 rounded-2xl flex flex-col items-center justify-center gap-6 text-center shadow-xl backdrop-blur-md max-w-2xl mx-auto my-8 relative overflow-hidden animate-in fade-in zoom-in duration-300">
+                  <div className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-brand-accent/20 via-brand-accent to-brand-accent/20 w-full animate-pulse" />
+                  
+                  {/* Outer circle spinner */}
+                  <div className="relative flex items-center justify-center">
+                    <svg className="w-16 h-16 text-zinc-800 animate-spin" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" fill="transparent" stroke="currentColor" strokeWidth="4" strokeDasharray="30 20" />
+                    </svg>
+                    <div className="absolute w-12 h-12 rounded-full border border-brand-accent/30 flex items-center justify-center">
+                      <Search className="w-5 h-5 text-brand-accent animate-pulse" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 select-none w-full max-w-md">
+                    <div className="flex justify-between text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1 px-1">
+                      <span>Analyzing Vault</span>
+                      <span className="text-brand-accent font-bold">{labourProgress}%</span>
+                    </div>
+                    {/* Modern high-contrast progress bar */}
+                    <div className="h-1.5 w-full bg-brand-black rounded-full overflow-hidden border border-brand-border/30">
+                      <div 
+                        className="h-full bg-brand-accent rounded-full transition-all duration-300"
+                        style={{ width: `${labourProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 w-full max-w-md">
+                    <p className="text-xs font-mono text-brand-accent font-medium uppercase tracking-wide min-h-[1.5rem] animate-pulse">
+                      {labourStatusMessage}
+                    </p>
+                    <p className="text-[10px] font-sans text-brand-gray/80 leading-relaxed max-w-xs mx-auto">
+                      Sorting credentials, calculating content trust index and applying NEET/JEE filters...
+                    </p>
+                  </div>
+
+                  {/* Aesthetic grid indicating activity */}
+                  <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-3 pt-3 border-t border-[#1E1E24] text-[9px] font-mono text-zinc-500 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Security: Rules Validated</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-accent" />
+                      <span>Index: Firestore Live</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      <span>Target: {examFilter}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-zinc-650" />
+                      <span>Status: Multi-layered Verified</span>
+                    </div>
+                  </div>
+                </div>
               ) : (() => {
                 const showLectures = activeExploreTab === 'home' || activeExploreTab === 'lecture';
                 const showTeachers = activeExploreTab === 'home' || activeExploreTab === 'teachers';
@@ -1399,7 +1497,7 @@ function AppContent() {
                                 channel: {
                                   id: lec.teacherId || 'unknown',
                                   name: lec.teacherName || 'Verified Educator',
-                                  avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=120',
+                                  avatarUrl: null,
                                   bannerUrl: null,
                                   subscriberCountRaw: 182000,
                                   subscriberCountFormatted: formattedSub
@@ -1646,7 +1744,7 @@ function AppContent() {
                         <span>🔍 VERIFIED VIDEO SEARCH</span>
                       </h3>
                       <p className="text-[11px] text-zinc-400 font-mono">
-                        Scanning verified Firestore <span className="text-white font-semibold">videos</span> catalog for <span className="text-orange-400 font-bold">"{searchQuery}"</span>
+                        Scanning verified Firestore <span className="text-white font-semibold">videos</span> catalog for <span className="text-white font-bold">"{searchQuery}"</span>
                       </p>
                     </div>
 
@@ -1678,7 +1776,7 @@ function AppContent() {
                       <select
                         value={vidSearchSubject}
                         onChange={(e) => setVidSearchSubject(e.target.value)}
-                        className="w-full bg-[#111113] border border-neutral-800 rounded-xl text-xs text-white p-2.5 outline-none focus:border-orange-500/50"
+                        className="w-full bg-[#111113] border border-neutral-800 rounded-xl text-xs text-white p-2.5 outline-none focus:border-zinc-500"
                       >
                         <option value="All">All Subjects</option>
                         {Array.from(new Set(firestoreVideos.map(v => v.subject).filter(Boolean))).map(s => (
@@ -1692,7 +1790,7 @@ function AppContent() {
                       <select
                         value={vidSearchChannel}
                         onChange={(e) => setVidSearchChannel(e.target.value)}
-                        className="w-full bg-[#111113] border border-neutral-800 rounded-xl text-xs text-white p-2.5 outline-none focus:border-orange-500/50"
+                        className="w-full bg-[#111113] border border-neutral-800 rounded-xl text-xs text-white p-2.5 outline-none focus:border-zinc-500"
                       >
                         <option value="All">All Channels</option>
                         {Array.from(new Set(firestoreVideos.map(v => v.channelName).filter(Boolean))).map(c => (
@@ -1711,7 +1809,7 @@ function AppContent() {
                             onClick={() => setVidSearchDuration(dur)}
                             className={`py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer text-center ${
                               vidSearchDuration === dur
-                                ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                                ? 'bg-white/10 text-white border border-white/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
@@ -1848,7 +1946,7 @@ function AppContent() {
                                         {v.subject}
                                       </span>
                                       {v.topic && (
-                                        <span className="text-[8px] font-mono font-bold uppercase bg-orange-950/25 text-orange-400 border border-orange-500/10 px-2 py-0.5 rounded">
+                                        <span className="text-[8px] font-mono font-black uppercase bg-[#EEEEEE] text-black border border-[#EEEEEE] px-2 py-0.5 rounded">
                                           {v.topic}
                                         </span>
                                       )}
@@ -1922,7 +2020,7 @@ function AppContent() {
                             channel: {
                               id: lec.teacherId || 'unknown',
                               name: lec.teacherName || 'Verified Educator',
-                              avatarUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=120',
+                              avatarUrl: null,
                               bannerUrl: null,
                               subscriberCountRaw: 182000,
                               subscriberCountFormatted: formattedSub
@@ -1977,7 +2075,7 @@ function AppContent() {
                                 <div className="text-right">
                                   <span className="block text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Trust Score</span>
                                   {t.trustScore === null || t.trustScore === undefined || t.trustScore === 0 ? (
-                                    <span className="text-[9px] font-mono font-medium text-orange-400 bg-zinc-800 px-2 py-0.5 rounded leading-none block">No Data</span>
+                                    <span className="text-[9px] font-mono font-medium text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded leading-none block">No Data</span>
                                   ) : (
                                     <span className="text-xs font-mono font-bold bg-zinc-800 px-2 py-0.5 rounded text-zinc-350">{t.trustScore}/100</span>
                                   )}
@@ -2007,7 +2105,7 @@ function AppContent() {
                             <DynamicRating 
                               targetId={t.id}
                               className="flex justify-between items-center text-[10px] font-mono w-full"
-                              starClassName="text-amber-500 font-sans flex items-center gap-1"
+                              starClassName="text-[#FFEFD5] font-sans flex items-center gap-1"
                               textClassName="text-zinc-500 uppercase ml-auto"
                             />
 

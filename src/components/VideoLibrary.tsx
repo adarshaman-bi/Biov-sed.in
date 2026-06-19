@@ -38,32 +38,8 @@ import { YouTubeChannel, YouTubeVideo, Playlist } from '../types';
 import { getPlaylistThumbnail } from '../services/thumbnailHelper';
 import ChannelHeader from './ChannelHeader';
 import LectureCard from './LectureCard';
-
-// High-fidelity image component with safety fallback chain: maxresdefault -> hqdefault -> custom default template
-function SafeThumbnail({ videoId, fallbackUrl, alt, className }: { videoId: string; fallbackUrl: string; alt: string; className?: string }) {
-  const [src, setSrc] = useState<string>(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
-  const [phase, setPhase] = useState<'maxres' | 'hq' | 'fallback'>('maxres');
-
-  const handleError = () => {
-    if (phase === 'maxres') {
-      setPhase('hq');
-      setSrc(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`);
-    } else if (phase === 'hq') {
-      setPhase('fallback');
-      setSrc(fallbackUrl);
-    }
-  };
-
-  return (
-    <img
-      src={src}
-      onError={handleError}
-      alt={alt}
-      className={className}
-      referrerPolicy="no-referrer"
-    />
-  );
-}
+import { SafeImage } from './SafeImage';
+import YoutubeThumbnailImg from './YoutubeThumbnailImg';
 
 interface VideoLibraryProps {
   onBackToHome: () => void;
@@ -605,7 +581,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
   }, [selectedPlaylist, playlistVideos, watchedVideoIds]);
 
   return (
-    <div className="w-full min-h-screen bg-[#070708] text-white font-sans selection:bg-[#2DD4BF] selection:text-black">
+    <div className="w-full min-h-screen bg-[#070708] text-white font-sans selection:bg-white selection:text-black">
       
       {/* 1. COMPACT HEADER */}
       <header className="border-b border-[#18181B] bg-[#0A0A0B]/85 backdrop-blur sticky top-0 z-50 px-4 py-3">
@@ -618,10 +594,10 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
               ← BIOVISED Portal
             </button>
             <div className="flex items-center gap-2">
-              <span className="p-1.5 bg-[#2DD4BF]/15 rounded-lg border border-[#2DD4BF]/30">
-                <Youtube className="w-4 h-4 text-[#2DD4BF]" />
+              <span className="p-1.5 bg-white/10 rounded-lg border border-white/20">
+                <Youtube className="w-4 h-4 text-white" />
               </span>
-              <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider text-white">Verse <span className="text-[#2DD4BF] font-mono text-xs">Video Library</span></h2>
+              <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider text-white">Verse <span className="text-[#EEEEEE] font-mono text-xs">Video Library</span></h2>
             </div>
           </div>
         </div>
@@ -642,13 +618,13 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
             >
               <div className="flex justify-between items-center bg-[#111113] p-4 rounded-xl border border-neutral-900">
                 <div>
-                  <h3 className="text-xs font-mono text-[#2DD4BF] tracking-widest uppercase font-bold">DIRECTORY RESULTS</h3>
+                  <h3 className="text-xs font-mono text-[#EEEEEE] tracking-widest uppercase font-bold">DIRECTORY RESULTS</h3>
                   <p className="text-lg font-semibold text-white">Searching local library for "{searchQuery}"</p>
                 </div>
                 <button
                   onClick={() => setShowFilters(!showFilters)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold ${
-                    showFilters ? 'bg-[#2DD4BF] text-black border-[#2DD4BF]' : 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800 text-zinc-300'
+                    showFilters ? 'bg-white text-black border-white' : 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800 text-zinc-300'
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
@@ -664,7 +640,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                     <select
                       value={filterSubject}
                       onChange={(e) => setFilterSubject(e.target.value)}
-                      className="w-full text-xs font-semibold h-9 rounded-lg bg-[#141416] border border-[#232326] text-white px-2 focus:outline-none focus:border-[#2DD4BF]"
+                      className="w-full text-xs font-semibold h-9 rounded-lg bg-[#141416] border border-[#232326] text-white px-2 focus:outline-none focus:border-white"
                     >
                       <option value="All">All Subjects</option>
                       <option value="Biology">Biology</option>
@@ -680,7 +656,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                     <select
                       value={filterChannel}
                       onChange={(e) => setFilterChannel(e.target.value)}
-                      className="w-full text-xs font-semibold h-9 rounded-lg bg-[#141416] border border-[#232326] text-white px-2 focus:outline-none focus:border-[#2DD4BF]"
+                      className="w-full text-xs font-semibold h-9 rounded-lg bg-[#141416] border border-[#232326] text-white px-2 focus:outline-none focus:border-white"
                     >
                       <option value="All">All Channels</option>
                       {channels.map((chan) => (
@@ -694,7 +670,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                     <select
                       value={filterDuration}
                       onChange={(e) => setFilterDuration(e.target.value)}
-                      className="w-full text-xs font-semibold h-9 rounded-lg bg-[#141416] border border-[#232326] text-white px-2 focus:outline-none focus:border-[#2DD4BF]"
+                      className="w-full text-xs font-semibold h-9 rounded-lg bg-[#141416] border border-[#232326] text-white px-2 focus:outline-none focus:border-white"
                     >
                       <option value="All">Any Duration</option>
                       <option value="Short">Short (&lt; 10m)</option>
@@ -708,7 +684,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
               {/* SEARCH RESULTS FEED */}
               {isLoadingSearch ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <div className="w-8 h-8 border-2 border-[#2DD4BF] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <p className="text-xs text-zinc-400 font-mono">Scanning curated Firestore database...</p>
                 </div>
               ) : searchResults.length === 0 ? (
@@ -737,7 +713,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                       channel: {
                         id: vid.channelId || 'unknown',
                         name: vid.channelName || 'Verified Educator',
-                        avatarUrl: matchedChan?.channelThumbnail || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=120',
+                        avatarUrl: matchedChan?.channelThumbnail || null,
                         bannerUrl: null,
                         subscriberCountRaw: subCount,
                         subscriberCountFormatted: formattedSub
@@ -800,7 +776,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                     <div
                       key={play.id}
                       onClick={() => setSelectedPlaylist(play)}
-                      className="bg-[#0E0E0F] border border-neutral-850 hover:border-[#2DD4BF]/50 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col group shadow-lg"
+                      className="bg-[#0E0E0F] border border-neutral-850 hover:border-zinc-700 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col group shadow-lg"
                     >
                       <div className="relative aspect-video bg-neutral-950 overflow-hidden">
                         <img
@@ -811,7 +787,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                         />
                       </div>
                       <div className="p-4 flex-grow flex flex-col justify-between">
-                        <h4 className="text-xs font-bold text-white uppercase line-clamp-2 leading-tight group-hover:text-[#2DD4BF] transition-colors">{play.title}</h4>
+                        <h4 className="text-xs font-bold text-white uppercase line-clamp-2 leading-tight group-hover:text-white transition-colors">{play.title}</h4>
                         <p className="text-[10px] text-zinc-500 font-sans mt-2">{play.videoCount || 0} Lectures</p>
                       </div>
                     </div>
@@ -833,7 +809,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                   onClick={() => setSelectedSubject(sub)}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-all duration-200 shrink-0 ${
                     selectedSubject === sub
-                      ? 'bg-[#2DD4BF] text-black font-extrabold shadow shadow-[#2DD4BF]/10'
+                      ? 'bg-[#EEEEEE] text-black font-extrabold shadow shadow-white/5'
                       : 'bg-neutral-900 border border-neutral-800 text-zinc-400 hover:text-white'
                   }`}
                 >
@@ -845,7 +821,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
             {/* A. FEATURED CURATED PLAYLISTS CAROUSEL */}
             <div className="space-y-4">
               <div>
-                <span className="text-[9px] font-mono text-[#2DD4BF] tracking-widest font-extrabold uppercase block">CURATED CURRICULA</span>
+                <span className="text-[9px] font-mono text-[#EEEEEE] tracking-widest font-extrabold uppercase block">CURATED CURRICULA</span>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">Featured Chapters</h3>
               </div>
 
@@ -874,7 +850,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                       </div>
                       <div className="p-3 flex-1 flex flex-col justify-between items-start space-y-2">
                         <div className="space-y-1 w-full">
-                          <span className="text-[9px] text-[#2DD4BF] font-mono uppercase bg-[#2DD4BF]/10 px-1.5 py-0.5 rounded font-bold">{play.subject}</span>
+                          <span className="text-[9px] text-[#A0A0A0] font-mono uppercase bg-white/10 px-1.5 py-0.5 rounded font-bold">{play.subject}</span>
                           <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 truncate w-full uppercase">{play.title}</h4>
                         </div>
                         <p className="text-[10px] text-zinc-500 font-sans truncate w-full leading-none">
@@ -891,7 +867,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
             {watchHistory.length > 0 && (
               <div className="space-y-4">
                 <div>
-                  <span className="text-[9px] font-mono text-amber-500 tracking-widest font-extrabold uppercase block">RESUME LEARNING</span>
+                  <span className="text-[9px] font-mono text-[#EEEEEE] tracking-widest font-extrabold uppercase block">RESUME LEARNING</span>
                   <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">Continue Watching</h3>
                 </div>
 
@@ -930,25 +906,24 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                           };
                           setSelectedVideo(partialVideo);
                         }}
-                        className="bg-[#0B0B0C] border border-[#1B1B1D]/80 rounded-xl overflow-hidden flex gap-3 p-3 items-center hover:border-amber-500/70 transition-all cursor-pointer group"
+                        className="bg-[#101010] border border-[#1A1A1A] rounded-xl overflow-hidden flex gap-3 p-3 items-center hover:border-zinc-700 transition-all cursor-pointer group"
                       >
                         <div className="relative w-24 aspect-video shrink-0 rounded-lg overflow-hidden bg-neutral-900 shadow">
-                          <img
-                            src={item.thumbnail}
+                          <YoutubeThumbnailImg
+                            videoId={item.videoId}
                             alt={item.title}
                             className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
                           />
                           <div className="absolute bottom-0 left-0 w-full h-1 bg-neutral-800">
-                            <div className="h-full bg-amber-500" style={{ width: `${progressPercent}%` }} />
+                            <div className="h-full bg-white" style={{ width: `${progressPercent}%` }} />
                           </div>
                         </div>
                         <div className="flex-1 min-w-0 space-y-1 text-left">
-                          <span className="text-[8px] font-mono text-[#2DD4BF] uppercase block font-semibold">{item.subject}</span>
-                          <h4 className="text-xs font-bold text-white leading-tight line-clamp-1 group-hover:text-amber-450 transition-colors">{item.title}</h4>
+                          <span className="text-[8px] font-mono text-[#A0A0A0] uppercase block font-semibold">{item.subject}</span>
+                          <h4 className="text-xs font-bold text-white leading-tight line-clamp-1 group-hover:text-white transition-colors">{item.title}</h4>
                           <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-0.5">
                             <span>{item.channelName}</span>
-                            <span className="text-[9px] text-[#2DD4BF] font-extrabold">{progressPercent}% done</span>
+                            <span className="text-[9px] text-[#EEEEEE] font-extrabold">{progressPercent}% done</span>
                           </div>
                         </div>
                       </div>
@@ -956,17 +931,15 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                   })}
                 </div>
               </div>
-            )}
-
-            {/* C. NEW THIS WEEK IMPORTED VIDEOS ROW */}
+            )}            {/* C. NEW THIS WEEK IMPORTED VIDEOS ROW */}
             <div className="space-y-4">
               <div>
-                <span className="text-[9px] font-mono text-[#2DD4BF] tracking-widest font-extrabold uppercase block">FRESH CLASSES</span>
+                <span className="text-[9px] font-mono text-[#EEEEEE] tracking-widest font-extrabold uppercase block">FRESH CLASSES</span>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">New This Week</h3>
               </div>
 
               {recentWeekVideos.length === 0 ? (
-                <div className="text-center py-8 rounded-xl border border-neutral-900 bg-neutral-950/20">
+                <div className="text-center py-8 rounded-xl border border-neutral-900 bg-neutral-955/20">
                   <p className="text-xs text-zinc-600 font-mono uppercase tracking-wider">No new classes imported in past 7 days. Sync channels via Content Manager.</p>
                 </div>
               ) : (
@@ -979,16 +952,15 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                         if (matchedPlay) setSelectedPlaylist(matchedPlay);
                         setSelectedVideo(vid);
                       }}
-                      className="bg-[#0C0C0D] border border-neutral-850 hover:border-[#2DD4BF] rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col h-full group"
+                      className="bg-[#0C0C0D] border border-neutral-855 hover:border-zinc-700 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col h-full group"
                     >
                       <div className="relative aspect-video bg-neutral-955 overflow-hidden shadow shrink-0">
-                        <SafeThumbnail
+                        <YoutubeThumbnailImg
                           videoId={vid.videoId}
-                          fallbackUrl={vid.thumbnail}
                           alt={vid.title}
                           className="w-full h-full object-cover transition-transform group-hover:scale-102"
                         />
-                        <div className="absolute top-2 left-2 bg-[#2DD4BF]/90 text-black text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded tracking-wider shadow">
+                        <div className="absolute top-2 left-2 bg-white text-black text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded tracking-wider shadow">
                           NEW
                         </div>
                         <div className="absolute right-2 bottom-2 px-1.5 py-0.5 bg-black/80 border border-neutral-800 text-[10px] font-mono font-bold text-zinc-350">
@@ -996,10 +968,10 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                         </div>
                       </div>
                       <div className="p-3 flex-1 flex flex-col justify-between items-start space-y-3">
-                        <h4 className="text-xs font-extrabold text-white line-clamp-2 uppercase leading-tight font-sans group-hover:text-[#2DD4BF] transition-colors">{vid.title}</h4>
+                        <h4 className="text-xs font-extrabold text-white line-clamp-2 uppercase leading-tight font-sans group-hover:text-white transition-colors">{vid.title}</h4>
                         <div className="flex justify-between items-center w-full text-[10px] text-zinc-500 font-mono pt-1 border-t border-neutral-900">
                           <span className="truncate max-w-[130px]">{vid.channelName}</span>
-                          <span className="text-[#2DD4BF] font-extrabold uppercase text-[9px]">{vid.subject}</span>
+                          <span className="text-[#A0A0A0] font-extrabold uppercase text-[9px]">{vid.subject}</span>
                         </div>
                       </div>
                     </div>
@@ -1011,7 +983,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
             {/* D. TOP RECOGNIZED ACCREDITED CHANNELS ROW */}
             <div className="space-y-4">
               <div>
-                <span className="text-[9px] font-mono text-[#2DD4BF] tracking-widest font-extrabold uppercase block">ACCREDITED PUBLISHERS</span>
+                <span className="text-[9px] font-mono text-[#EEEEEE] tracking-widest font-extrabold uppercase block">ACCREDITED PUBLISHERS</span>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">Top Channels</h3>
               </div>
 
@@ -1028,16 +1000,17 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                         setSelectedChannel(chan);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className="bg-[#0E0E0F]/90 border border-zinc-850 p-4 rounded-xl text-center space-y-3 flex flex-col items-center hover:bg-[#121214] hover:border-[#2DD4BF]/50 transition-all duration-300 cursor-pointer shadow-md"
+                      className="bg-[#0E0E0F]/90 border border-zinc-850 p-4 rounded-xl text-center space-y-3 flex flex-col items-center hover:bg-[#121214] hover:border-zinc-700 transition-all duration-300 cursor-pointer shadow-md"
                     >
                       <div className="relative">
-                        <img
-                          src={chan.channelThumbnail || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=120'}
+                        <SafeImage
+                          src={chan.channelThumbnail}
                           alt={chan.channelName}
-                          className="w-16 h-16 rounded-full border-2 border-neutral-800 object-cover shadow"
-                          referrerPolicy="no-referrer"
+                          variant="avatar"
+                          className="w-16 h-16 rounded-full border-2 border-neutral-855 select-none"
+                          fallbackInitials={chan.channelName ? chan.channelName.slice(0, 2) : "ED"}
                         />
-                        <span className="absolute bottom-0 right-0 w-4 h-4 bg-[#2DD4BF] rounded-full border border-black flex items-center justify-center text-[9px] text-black font-black">✓</span>
+                        <span className="absolute bottom-0 right-0 w-4 h-4 bg-white rounded-full border border-black flex items-center justify-center text-[9px] text-black font-black">✓</span>
                       </div>
                       <div className="text-center">
                         <h4 className="text-xs font-bold leading-tight line-clamp-1 text-white uppercase">{chan.channelName}</h4>
@@ -1100,7 +1073,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                   </p>
                 )}
                 {activePlaylistProgressText && (
-                  <p className="text-xs font-mono text-[#2DD4BF] font-extrabold">
+                  <p className="text-xs font-mono text-white font-extrabold">
                     📊 Stats: {activePlaylistProgressText}
                   </p>
                 )}
@@ -1113,11 +1086,11 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
               
               {isLoadingPlaylistVideos ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <div className="w-8 h-8 border-2 border-[#2DD4BF] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <p className="text-xs text-zinc-550 font-mono animate-pulse">Initializing course syllabus stream...</p>
                 </div>
               ) : playlistVideos.length === 0 ? (
-                <div className="text-center py-12 rounded-xl border border-neutral-900 bg-neutral-950/20">
+                <div className="text-center py-12 rounded-xl border border-neutral-900 bg-neutral-955/20">
                   <p className="text-xs text-zinc-550 font-mono uppercase">This playlist does not contain indexed videos. Import them in the Content Manager.</p>
                 </div>
               ) : (
@@ -1134,16 +1107,15 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                           {/* Index number or watch check */}
                           <div className="w-6 text-center text-xs font-mono text-zinc-500 shrink-0 font-bold">
                             {isWatched ? (
-                              <CheckCircle className="w-4 h-4 text-[#2DD4BF] mx-auto" />
+                              <CheckCircle className="w-4 h-4 text-white mx-auto" />
                             ) : (
                               `0${idx + 1}`.slice(-2)
                             )}
                           </div>
 
                           <div className="w-20 sm:w-28 aspect-video shrink-0 bg-[#070708] border border-neutral-800 rounded-lg overflow-hidden relative group">
-                            <SafeThumbnail
+                            <YoutubeThumbnailImg
                               videoId={video.videoId}
-                              fallbackUrl={video.thumbnail}
                               alt={video.title}
                               className="absolute inset-0 w-full h-full object-cover"
                             />
@@ -1156,7 +1128,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                             </h4>
                             <div className="flex items-center gap-2 mt-1">
                               {video.topic && (
-                                <span className="text-[9px] text-[#2DD4BF] font-mono">
+                                <span className="text-[9px] text-[#A0A0A0] font-mono">
                                   #{video.topic}
                                 </span>
                               )}
@@ -1174,7 +1146,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                             onClick={(e) => toggleMarkWatched(video, e)}
                             className={`p-1.5 rounded-lg border text-xs focus:outline-none transition-colors ${
                               isWatched
-                                ? 'bg-[#2DD4BF]/10 border-[#2DD4BF]/30 text-[#2DD4BF]'
+                                ? 'bg-white/10 border-white/20 text-white'
                                 : 'bg-neutral-900 border-neutral-800 hover:bg-neutral-800 text-zinc-500 hover:text-white'
                             }`}
                             title={isWatched ? "Mark Unwatched" : "Mark Watched"}
@@ -1215,7 +1187,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                 ← Back to Syllabus Chapters
               </button>
               {activePlaylistProgressText && (
-                <span className="text-[11px] font-mono text-[#2DD4BF] font-bold">
+                <span className="text-[11px] font-mono text-white font-bold">
                   Progress Checklist: {activePlaylistProgressText}
                 </span>
               )}
@@ -1244,7 +1216,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                   {/* Simulated elegant custom HUD in overlay mode when requested */}
                   {!playerIsReady && (
                     <div className="absolute inset-0 bg-[#08080A] flex flex-col items-center justify-center gap-3 z-10 select-none">
-                      <div className="w-10 h-10 border-2 border-[#2DD4BF] border-t-transparent rounded-full animate-spin" />
+                      <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest leading-none">Initializing Secure Stream Port...</p>
                     </div>
                   )}
@@ -1268,7 +1240,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                     <button
                       onClick={handlePlayPause}
                       disabled={!playerIsReady}
-                      className="p-2.5 bg-[#2DD4BF] text-black hover:bg-[#25b5a3] hover:scale-102 rounded-full cursor-pointer transition-all disabled:opacity-50"
+                      className="p-2.5 bg-[#EEEEEE] text-black hover:bg-white hover:scale-102 rounded-full cursor-pointer transition-all disabled:opacity-50"
                       title={isPlaying ? "Pause Video" : "Play Video"}
                     >
                       <Play className="w-4 h-4 fill-current" />
@@ -1306,7 +1278,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                         max="100"
                         value={isMuted ? 0 : playerVolume}
                         onChange={(e) => changeVolume(Number(e.target.value))}
-                        className="w-16 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#2DD4BF]"
+                        className="w-16 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white"
                       />
                     </div>
 
@@ -1322,7 +1294,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                             }
                           }}
                           className={`px-2 py-1 rounded text-[10px] font-mono font-bold transition-all ${
-                            playbackRate === rate ? 'bg-[#2DD4BF] text-black font-black' : 'bg-neutral-900 text-zinc-400 hover:text-white'
+                            playbackRate === rate ? 'bg-[#EEEEEE] text-black font-black' : 'bg-neutral-900 text-zinc-400 hover:text-white'
                           }`}
                         >
                           {rate}x
@@ -1344,7 +1316,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                 {/* Lecture details info card below */}
                 <div className="text-left space-y-2 py-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] text-[#2DD4BF] font-mono bg-[#2DD4BF]/10 border border-[#2DD4BF]/20 px-2 py-0.5 uppercase tracking-wide rounded font-bold">
+                    <span className="text-[10px] text-[#A0A0A0] font-mono bg-white/10 border border-white/20 px-2 py-0.5 uppercase tracking-wide rounded font-bold">
                       {selectedVideo.subject} Verified
                     </span>
                     {selectedVideo.topic && (
@@ -1356,7 +1328,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                       onClick={() => toggleMarkWatched(selectedVideo)}
                       className={`ml-auto text-[10px] font-mono border rounded px-3 py-1 flex items-center gap-1 hover:scale-101 transition-all ${
                         watchedVideoIds.includes(selectedVideo.videoId)
-                          ? 'bg-[#2DD4BF]/15 border-[#2DD4BF]/45 text-[#2DD4BF]'
+                          ? 'bg-white/15 border-white/30 text-white'
                           : 'bg-neutral-900 border-neutral-800 text-zinc-400'
                       }`}
                     >
@@ -1389,10 +1361,10 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
               <div className="lg:col-span-4 space-y-3.5">
                 <div className="p-4 rounded-xl bg-[#09090A] border border-neutral-910 text-left space-y-2">
                   <span className="text-[9px] font-mono text-zinc-500 uppercase block font-bold leading-none">PLAYING CONTEXT</span>
-                  <h4 className="text-xs font-mono font-bold text-[#2DD4BF] uppercase line-clamp-1 truncate w-full">{selectedPlaylist.title}</h4>
+                  <h4 className="text-xs font-mono font-bold text-white uppercase line-clamp-1 truncate w-full">{selectedPlaylist.title}</h4>
                   <div className="w-full bg-zinc-805 h-1.5 rounded overflow-hidden">
                     <div 
-                      className="bg-[#2DD4BF] h-full transition-all duration-300" 
+                      className="bg-white h-full transition-all duration-300" 
                       style={{ 
                         width: `${playlistVideos.length ? (playlistVideos.filter(v => watchedVideoIds.includes(v.videoId)).length / playlistVideos.length) * 100 : 0}%` 
                       }} 
@@ -1415,20 +1387,19 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                         onClick={() => setSelectedVideo(item)}
                         className={`p-2.5 rounded-xl border flex items-center gap-3 text-left cursor-pointer transition-all ${
                           isCurrent
-                            ? 'bg-[#2DD4BF]/5 border-[#2DD4BF] shadow'
+                            ? 'bg-white/5 border-zinc-450 shadow'
                             : 'bg-[#0E0E0F] border-neutral-900 hover:border-zinc-800'
                         }`}
                       >
                         <div className="relative w-16 aspect-video rounded-lg overflow-hidden shrink-0 bg-neutral-950">
-                          <img
-                            src={item.thumbnail}
+                          <YoutubeThumbnailImg
+                            videoId={item.videoId}
                             alt={item.title}
                             className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
                           />
                           {isWatched && (
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                              <CheckCircle className="w-5 h-5 text-[#2DD4BF]" />
+                              <CheckCircle className="w-5 h-5 text-white" />
                             </div>
                           )}
                         </div>
@@ -1439,12 +1410,12 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                               Ch.{index + 1}
                             </span>
                             {isCurrent && (
-                              <span className="text-[8px] bg-[#2DD4BF] text-black font-extrabold px-1.5 py-0.2 rounded uppercase animate-pulse leading-none">
+                              <span className="text-[8px] bg-[#EEEEEE] text-black font-extrabold px-1.5 py-0.2 rounded uppercase animate-pulse leading-none">
                                 Watching
                               </span>
                             )}
                           </div>
-                          <h5 className={`text-[11px] font-extrabold line-clamp-1 px-0.2 uppercase font-sans truncate ${isCurrent ? 'text-[#2DD4BF]' : 'text-zinc-200'}`}>
+                          <h5 className={`text-[11px] font-extrabold line-clamp-1 px-0.2 uppercase font-sans truncate ${isCurrent ? 'text-white' : 'text-zinc-200'}`}>
                             {item.title}
                           </h5>
                           <span className="text-[10px] text-zinc-550 font-mono">{item.duration || 'Class'}</span>

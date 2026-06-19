@@ -46,19 +46,19 @@ export function serializeRelationToDTO(rawRow: RawRowJoinResult): LectureWithCha
     title: rawRow.video_title,
     description: rawRow.video_description || "",
     
-    // ✅ FIX: Resolving the relative thumbnail path through the CDN layer
-    thumbnailUrl: MediaResolverService.resolveUrl(rawRow.video_thumbnail_path, false),
+    // Outputs raw string path directly from the database record, leaving resolution to the client-side component layer
+    thumbnailUrl: rawRow.video_thumbnail_path || "",
     
     duration: Number(rawRow.video_duration) || 0,
     channel: {
       id: rawRow.channel_id,
       name: rawRow.channel_name || "Verified Educator",
       
-      // ✅ FIX: Resolving the channel profile avatar via CDN layer
-      avatarUrl: MediaResolverService.resolveUrl(rawRow.channel_avatar_path || '', false),
+      // Outputs raw string path directly
+      avatarUrl: rawRow.channel_avatar_path || "",
       
-      // ✅ FIX: Resolving the channel top banner via CDN layer
-      bannerUrl: rawRow.channel_banner_path ? MediaResolverService.resolveUrl(rawRow.channel_banner_path, false) : null,
+      // Outputs raw string path directly
+      bannerUrl: rawRow.channel_banner_path || null,
       
       subscriberCountFormatted: formatSubscriberCount(Number(rawRow.raw_subscriber_count) || 0)
     }

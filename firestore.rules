@@ -245,17 +245,26 @@ service cloud.firestore {
 
     // Teacher Profiles
     match /teachers/{teacherId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isSignedIn() && (isAdmin() || (isOwner(teacherId) && isValidTeacher(incoming())));
+      allow update: if isModerator() || isAdmin() || (isSignedIn() && isOwner(teacherId) && isValidTeacher(incoming()) && incoming().isVerified == existing().isVerified);
+      allow delete: if isAdmin();
     }
 
     // Institute Profiles
     match /institutes/{instituteId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isSignedIn() && (isAdmin() || (isOwner(instituteId) && isValidInstitute(incoming())));
+      allow update: if isModerator() || isAdmin() || (isSignedIn() && isOwner(instituteId) && isValidInstitute(incoming()) && incoming().isVerified == existing().isVerified);
+      allow delete: if isAdmin();
     }
 
     // Lecture Catalog
     match /lectures/{lectureId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if isEducator() || isAdmin() || isModerator();
+      allow update: if isEducator() || isModerator() || isAdmin();
+      allow delete: if isAdmin() || isModerator();
     }
 
     // Playlists directory
@@ -279,7 +288,9 @@ service cloud.firestore {
 
     // Institute Batches
     match /batches/{batchId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create, update: if isEducator() || isAdmin() || isModerator();
+      allow delete: if isAdmin() || isModerator();
     }
 
     // Verified Reviews (Students publish feedback)
@@ -303,7 +314,8 @@ service cloud.firestore {
 
     // TrustScores dynamic computed metrics
     match /trustScores/{entityId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin() || isModerator();
     }
 
     // Abuse / Spam Reports queue
@@ -360,6 +372,12 @@ service cloud.firestore {
     match /syncLogs/{logId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    // Global layout blocks and custom configurations (Public load, Admin write)
+    match /system/{configId} {
+      allow read: if true;
+      allow write: if isAdmin() || isModerator();
     }
 
   }

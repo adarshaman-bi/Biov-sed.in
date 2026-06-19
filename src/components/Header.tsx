@@ -189,7 +189,7 @@ export default function Header({
                 }}
                 className={`p-1.5 rounded-full transition-all cursor-pointer flex items-center justify-center bg-zinc-900 border border-zinc-850 hover:bg-zinc-800 ${
                   showFilters
-                    ? 'text-[#FF5A1F]'
+                    ? 'text-white'
                     : 'text-zinc-350 hover:text-white'
                 }`}
                 title="Search filters"
@@ -216,7 +216,7 @@ export default function Header({
                         e.stopPropagation();
                         setIsFocused(false);
                       }}
-                      className="sm:hidden text-[10px] font-mono font-bold text-[#FF5A1F] active:text-white uppercase tracking-wider px-2.5 py-1 rounded border border-zinc-800 bg-zinc-950"
+                      className="sm:hidden text-[10px] font-mono font-bold text-[#EEEEEE] active:text-white uppercase tracking-wider px-2.5 py-1 rounded border border-zinc-800 bg-zinc-950"
                     >
                       Close
                     </button>
@@ -262,7 +262,7 @@ export default function Header({
                         e.stopPropagation();
                         setIsFocused(false);
                       }}
-                      className="sm:hidden text-[10px] font-mono font-bold text-[#FF5A1F] active:text-white uppercase tracking-wider px-2.5 py-1 rounded border border-zinc-800 bg-zinc-950"
+                      className="sm:hidden text-[10px] font-mono font-bold text-[#EEEEEE] active:text-white uppercase tracking-wider px-2.5 py-1 rounded border border-zinc-800 bg-zinc-950"
                     >
                       Close
                     </button>

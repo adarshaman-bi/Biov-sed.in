@@ -25,26 +25,26 @@ export default function ChannelHeader({ channel, onBack }: ChannelHeaderProps) {
     <div className="w-full bg-[#08080A] rounded-2xl overflow-hidden border border-zinc-900 shadow-2xl relative">
       
       {/* 1. PREMIUM COHERENT CHANNEL BANNER AREA */}
-      <div className="relative h-40 sm:h-52 w-full overflow-hidden bg-black">
+      <div className="relative w-full aspect-video object-cover overflow-hidden bg-black">
         {bannerUrl && !bannerError ? (
           <img
             key={bannerUrl} // Explicit key identity layout binding to prevent caching/bleeding
             src={bannerUrl}
             alt={`${channel.name} Banner`}
             onError={() => setBannerError(true)}
-            className="w-full h-full object-cover select-none pointer-events-none transition-opacity duration-300"
+            className="w-full h-full aspect-video object-cover select-none pointer-events-none transition-opacity duration-300"
             referrerPolicy="no-referrer"
           />
         ) : (
           /* Graceful, elegant Tailwind gradient fallback placeholder with modern technical visual elements */
-          <div className="w-full h-full bg-gradient-to-r from-zinc-950 via-[#101014] to-zinc-950 flex items-center justify-center relative select-none">
+          <div className="w-full h-full aspect-video object-cover bg-gradient-to-r from-zinc-950 via-[#101014] to-zinc-950 flex items-center justify-center relative select-none">
             {/* Subtle architectural noise/grid pattern */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#1b1b22_1px,transparent_1px),linear-gradient(to_bottom,#1b1b22_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
             
             {/* Minimalist ambient flare */}
-            <div className="absolute -top-12 left-1/3 w-72 h-32 bg-[#2DD4BF]/5 blur-[80px] rounded-full pointer-events-none" />
-            <div className="absolute -bottom-12 right-1/3 w-72 h-32 bg-[#FF5A1F]/5 blur-[80px] rounded-full pointer-events-none" />
+            <div className="absolute -top-12 left-1/3 w-72 h-32 bg-white/5 blur-[80px] rounded-full pointer-events-none" />
+            <div className="absolute -bottom-12 right-1/3 w-72 h-32 bg-white/5 blur-[80px] rounded-full pointer-events-none" />
 
             <div className="relative text-center opacity-40 font-mono tracking-widest text-[9px] uppercase font-semibold text-zinc-500">
               Biovised Verified Academic Channel
@@ -63,8 +63,8 @@ export default function ChannelHeader({ channel, onBack }: ChannelHeaderProps) {
         )}
 
         <div className="absolute bottom-3 right-4 bg-black/60 backdrop-blur-md border border-white/5 py-1 px-2.5 rounded-md flex items-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#2DD4BF]" />
-          <span className="text-[8px] font-mono font-black text-[#2DD4BF] uppercase tracking-wider">Curriculum Verified</span>
+          <ShieldCheck className="w-3.5 h-3.5 text-white" />
+          <span className="text-[8px] font-mono font-black text-white uppercase tracking-wider">Curriculum Verified</span>
         </div>
       </div>
 
@@ -73,19 +73,19 @@ export default function ChannelHeader({ channel, onBack }: ChannelHeaderProps) {
         
         {/* Floating Absolute Avatar overlap */}
         <div className="absolute -top-12 sm:-top-16 left-6 z-10">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-[#08080A] bg-[#0E0E10] overflow-hidden shadow-2xl relative select-none">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 aspect-square object-contain scale-100 rounded-full border-4 border-[#08080A] bg-[#0E0E10] overflow-hidden shadow-2xl relative select-none">
             {avatarUrl && !avatarError ? (
               <img
                 key={avatarUrl} // Explicit identity layout key to shield concurrency
                 src={avatarUrl}
                 alt={channel.name}
                 onError={() => setAvatarError(true)}
-                className="w-full h-full object-cover transition-opacity duration-300"
+                className="w-full h-full aspect-square object-contain scale-100 transition-opacity duration-300"
                 referrerPolicy="no-referrer"
               />
             ) : (
               /* High contrast fallback placeholder logo if load fails */
-              <div className="w-full h-full bg-[#1A1A20] flex items-center justify-center font-display font-black text-2xl text-white">
+              <div className="w-full h-full aspect-square object-contain scale-100 bg-[#1A1A20] flex items-center justify-center font-display font-black text-2xl text-white">
                 {channel.name.slice(0, 2).toUpperCase()}
               </div>
             )}
@@ -98,7 +98,7 @@ export default function ChannelHeader({ channel, onBack }: ChannelHeaderProps) {
             <h2 className="text-lg sm:text-xl font-display font-semibold text-white tracking-tight uppercase leading-none">
               {channel.name}
             </h2>
-            <span className="inline-flex items-center gap-1 bg-[#2DD4BF]/10 text-[#2DD4BF] border border-[#2DD4BF]/20 text-[8px] font-mono font-bold px-2 py-0.5 rounded-full uppercase leading-none">
+            <span className="inline-flex items-center gap-1 bg-[#EEEEEE] text-black border border-[#EEEEEE] text-[8px] font-mono font-black px-2 py-0.5 rounded-full uppercase leading-none">
               <Award className="w-2.5 h-2.5" /> Premium Content Partner
             </span>
           </div>

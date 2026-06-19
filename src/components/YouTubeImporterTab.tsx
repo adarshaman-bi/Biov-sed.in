@@ -492,7 +492,7 @@ export default function YouTubeImporterTab({
                             key={step}
                             className={`p-1 rounded border transition-all ${
                               isActive 
-                                ? 'bg-orange-500/15 border-orange-500 text-orange-400 font-bold active-step-glow'
+                                ? 'bg-indigo-500/15 border-indigo-500 text-indigo-400 font-bold active-step-glow'
                                 : isDone
                                   ? 'bg-emerald-500/10 border-emerald-800 text-emerald-400'
                                   : 'bg-zinc-900 border-zinc-850 text-zinc-500'
@@ -501,7 +501,7 @@ export default function YouTubeImporterTab({
                             <div>{step}</div>
                             <div className="mt-1 flex justify-center">
                               {isActive ? (
-                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                               ) : isDone ? (
                                 <Check className="w-2.5 h-2.5" />
                               ) : (
@@ -954,8 +954,8 @@ export default function YouTubeImporterTab({
                         <tr key={log.id} className="border-b border-zinc-855 hover:bg-zinc-900/30 transition-colors">
                           <td className="p-3.5 font-bold">
                             <span className={`px-1.5 py-0.5 rounded ${
-                              isCron ? 'bg-orange-500/10 text-orange-400' :
-                              isVid ? 'bg-indigo-500/10 text-indigo-400' : 'bg-rose-500/10 text-rose-400'
+                              isCron ? 'bg-white/10 text-[#EEEEEE]' :
+                              isVid ? 'bg-white/10 text-zinc-300' : 'bg-zinc-800 text-zinc-400'
                             }`}>
                               {log.type}
                             </span>
@@ -964,7 +964,7 @@ export default function YouTubeImporterTab({
                           <td className="p-3.5 text-zinc-300 font-bold">{log.videosImported}</td>
                           <td className="p-3.5 text-zinc-300 font-bold">{log.playlistsImported}</td>
                           <td className="p-3.5">
-                            <span className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 rounded border border-emerald-990/30 font-bold font-sans">
+                            <span className="text-zinc-100 bg-white/10 px-2 py-0.5 rounded border border-white/5 font-bold font-mono">
                               {log.apiUnitsUsed} units
                             </span>
                           </td>

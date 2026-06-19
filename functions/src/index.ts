@@ -1250,7 +1250,7 @@ async function internalImportChannelPlaylists(channelId: string, apiKey: string,
               channelName,
               title: item.snippet?.title || 'Academic Course Series',
               description: item.snippet?.description || 'Verified course chapter playlist.',
-              thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
+              thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
               videoCount: item.contentDetails?.itemCount || 0,
               lecturesCount: item.contentDetails?.itemCount || 0,
               publishedAt: item.snippet?.publishedAt || new Date().toISOString(),
@@ -1585,12 +1585,13 @@ async function internalSyncChannel(channelId: string, apiKey: string, isDemo: bo
   let channelName = '';
   let channelHandle = '';
   let channelThumbnail = '';
+  let bannerUrl: string | null = null;
   let description = '';
   let totalVideos = 0;
   
   if (!isDemo && apiKey) {
     try {
-      const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+      const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
       const res = await fetch(channelUrl);
       if (res.ok) {
         const payload = await res.json();
@@ -1599,6 +1600,7 @@ async function internalSyncChannel(channelId: string, apiKey: string, isDemo: bo
           channelName = item.snippet?.title || '';
           channelHandle = item.snippet?.customUrl || '';
           channelThumbnail = item.snippet?.thumbnails?.medium?.url || '';
+          bannerUrl = item.brandingSettings?.image?.bannerExternalUrl || null;
           description = item.snippet?.description || '';
           subscriberCount = parseInt(item.statistics?.subscriberCount || '0') || 0;
           totalVideos = parseInt(item.statistics?.videoCount || '0') || 0;
@@ -1624,6 +1626,7 @@ async function internalSyncChannel(channelId: string, apiKey: string, isDemo: bo
   if (channelName) updateData.channelName = channelName;
   if (channelThumbnail) updateData.channelThumbnail = channelThumbnail;
   if (totalVideos) updateData.totalVideos = totalVideos;
+  if (bannerUrl !== undefined) updateData.bannerUrl = bannerUrl;
   
   await channelRef.update(updateData);
   
@@ -1667,7 +1670,7 @@ async function internalSyncChannel(channelId: string, apiKey: string, isDemo: bo
         channelName: channelName || existingData.channelName || 'Verified Educator',
         title: plTitle,
         description: item.snippet?.description || '',
-        thumbnailUrl: item.snippet?.thumbnails?.high?.url || '',
+        thumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=400',
         videoCount: plCount,
         lecturesCount: plCount,
         createdAt: new Date().toISOString(),
@@ -1751,6 +1754,7 @@ export const importChannel = functions.https.onCall(async (data, context) => {
   let channelName = "Verified Educator Academy";
   let channelHandle = channelUrl.startsWith('@') ? channelUrl : `@${channelId}`;
   let channelThumbnail = "https://images.unsplash.com/photo-1544717305-2782549b5136?w=120";
+  let bannerUrl: string | null = null;
   let description = "Quality online educational courses curated for pre-medical NEET preparation.";
   let subscriberCount = 1500000;
   let totalVideos = 420;
@@ -1761,9 +1765,9 @@ export const importChannel = functions.https.onCall(async (data, context) => {
     try {
       let ytUrl = '';
       if (parsed.type === 'id') {
-        ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+        ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
       } else if (parsed.type === 'handle') {
-        ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&forHandle=${parsed.value}&key=${apiKey}`;
+        ytUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&forHandle=${parsed.value}&key=${apiKey}`;
       } else {
         ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(parsed.value)}&type=channel&maxResults=1&key=${apiKey}`;
       }
@@ -1776,7 +1780,7 @@ export const importChannel = functions.https.onCall(async (data, context) => {
         // If it was a search, resolve item.id.channelId with channels.list Detail
         if (parsed.type === 'query' && item?.id?.channelId) {
           channelId = item.id.channelId;
-          const detailsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+          const detailsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
           const detailsRes = await fetch(detailsUrl);
           if (detailsRes.ok) {
             const detailsPayload = await detailsRes.json();
@@ -1789,6 +1793,7 @@ export const importChannel = functions.https.onCall(async (data, context) => {
           channelName = item.snippet?.title || channelName;
           channelHandle = item.snippet?.customUrl || `@${channelId}`;
           channelThumbnail = item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || channelThumbnail;
+          bannerUrl = item.brandingSettings?.image?.bannerExternalUrl || null;
           description = item.snippet?.description || description;
           subscriberCount = parseInt(item.statistics?.subscriberCount || '0') || subscriberCount;
           totalVideos = parseInt(item.statistics?.videoCount || '0') || totalVideos;
@@ -1825,6 +1830,7 @@ export const importChannel = functions.https.onCall(async (data, context) => {
     channelName,
     channelHandle,
     channelThumbnail,
+    bannerUrl,
     subscriberCount,
     description,
     addedBy: context.auth?.token?.email || 'admin@biovised.com',

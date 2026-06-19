@@ -112,6 +112,7 @@ export interface Lecture {
   language?: string | null;
   teacherRef?: string | null;
   sourceUrl?: string;
+  source?: 'youtube' | 'platform' | string;
   verified?: boolean;
   verificationStatus?: 'verified' | 'pending' | 'rejected' | string;
   exams?: string[];
@@ -158,6 +159,7 @@ export interface YouTubeChannel {
   channelName: string;
   channelHandle: string;
   channelThumbnail: string;
+  bannerUrl: string | null;
   subscriberCount: number;
   description: string;
   addedBy: string;
@@ -353,6 +355,7 @@ export interface TestSeriesEntry {
   features: string[];          // e.g. ["All India Rank", "Video Solutions"]
   bannerUrl: string | null;
   thumbnailUrl: string | null;
+  logo: string | null;
   imageSourceUrl: string | null;
   officialUrl: string;
   locations?: string[];        // offline only
@@ -372,7 +375,6 @@ export interface TestSeriesEntry {
   oneLineDescription?: string;
   description?: string;
   isVerified?: boolean;
-  logo?: string;
   officialLinks?: string[];
   centers?: string[];
   subjects?: string[];

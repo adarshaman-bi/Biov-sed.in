@@ -1,10 +1,5 @@
 import { TestSeriesEntry, TrustScoreBreakdown } from '../types';
 
-const IMAGES = {
-  online: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
-  offline: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=600&auto=format&fit=crop&q=80'
-};
-
 const COMPACT_DATA: any[] = [
   // ==================== ONLINE TEST SERIES (20 ITEMS) ====================
   {
@@ -1112,34 +1107,178 @@ function calculateTrustScore(
 
 function getOfficialImages(provider: string): { 
   bannerUrl: string | null; 
-  thumbnailUrl: string | null; 
+  logo: string | null; 
   imageSourceUrl: string | null; 
 } {
   const p = provider.toLowerCase();
+  
   if (p.includes('physics wallah') || p === 'pw') {
     return {
-      bannerUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=1200&auto=format&fit=crop&q=80',
-      thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/e/e0/Physics_Wallah_Logo.png',
+      bannerUrl: null,
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/e/e0/Physics_Wallah_Logo.png',
       imageSourceUrl: 'https://commons.wikimedia.org/wiki/File:Physics_Wallah_Logo.png'
     };
   }
   if (p.includes('allen')) {
     return {
-      bannerUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1200&auto=format&fit=crop&q=80',
-      thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Allen_Career_Institute_logo.svg/512px-Allen_Career_Institute_logo.svg.png',
+      bannerUrl: null,
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Allen_Career_Institute_logo.svg/512px-Allen_Career_Institute_logo.svg.png',
       imageSourceUrl: 'https://commons.wikimedia.org/wiki/File:Allen_Career_Institute_logo.svg'
     };
   }
   if (p.includes('aakash')) {
     return {
-      bannerUrl: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=1200&auto=format&fit=crop&q=80',
-      thumbnailUrl: 'https://upload.wikimedia.org/wikipedia/commons/5/52/Aakash_byjus_new_logo.png',
+      bannerUrl: null,
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/5/52/Aakash_byjus_new_logo.png',
       imageSourceUrl: 'https://commons.wikimedia.org/wiki/File:Aakash_byjus_new_logo.png'
     };
   }
+  if (p.includes('unacademy')) {
+    return {
+      bannerUrl: null,
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/3/30/Unacademy_logo.png',
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('vedantu')) {
+    return {
+      bannerUrl: null,
+      logo: 'https://upload.wikimedia.org/wikipedia/commons/3/36/Vedantu_logo.png',
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('fiitjee')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('resonance')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('motion')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('testbook')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('adda')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('narayana')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('chaitanya')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('vidyamandir')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('pace')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('career point')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('embibe')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('toppr')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('doubtnut')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('khan')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('oswaal')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('brilliant')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('bansal')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  if (p.includes('vibrant')) {
+    return {
+      bannerUrl: null,
+      logo: null,
+      imageSourceUrl: null
+    };
+  }
+  
+  // Handle all other providers explicitly without hardcoded general Unsplash links
+  // They will use the custom CSS gradient fallback block and default badges
   return {
     bannerUrl: null,
-    thumbnailUrl: null,
+    logo: null,
     imageSourceUrl: null
   };
 }
@@ -1172,9 +1311,9 @@ export const TEST_SERIES_CATALOG: TestSeriesEntry[] = COMPACT_DATA.map(item => {
     languages: item.languages,
     features: item.features,
     bannerUrl: item.bannerUrl !== undefined ? item.bannerUrl : imageInfo.bannerUrl,
-    thumbnailUrl: item.thumbnailUrl !== undefined ? item.thumbnailUrl : imageInfo.thumbnailUrl,
+    thumbnailUrl: item.thumbnailUrl !== undefined ? item.thumbnailUrl : imageInfo.logo,
     imageSourceUrl: item.imageSourceUrl !== undefined ? item.imageSourceUrl : imageInfo.imageSourceUrl,
-    logo: item.logo !== undefined ? item.logo : imageInfo.thumbnailUrl, // fallback
+    logo: item.logo !== undefined ? item.logo : imageInfo.logo, // fallback
     officialUrl: item.officialUrl,
     officialLinks: [item.officialUrl], // fallback
     locations: item.locations || [],

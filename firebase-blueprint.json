@@ -407,6 +407,20 @@
         "nextPhaseStart": { "type": "string" }
       },
       "required": ["phase", "playlistsImported", "lecturesImported", "approved"]
+    },
+    "GlobalLayoutConfig": {
+      "title": "Global Layout Config",
+      "description": "Flexible theme landing page visual layout ordering blocks, announcements and hero sliders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "announcementBar": { "type": "object" },
+        "heroSlides": { "type": "array" },
+        "layoutBlocks": { "type": "array" },
+        "notificationBroadcasts": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -513,6 +527,10 @@
     "/syncLogs/{logId}": {
       "schema": "YouTubeSyncLog",
       "description": "Operation synchronization logs for audited background ingestion"
+    },
+    "/system/{configId}": {
+      "schema": "GlobalLayoutConfig",
+      "description": "Global customizable layout order block vectors"
     }
   }
 }

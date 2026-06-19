@@ -15,6 +15,7 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { SafeImage } from '../SafeImage';
 
 interface TestSeriesDetailProps {
   id?: string;
@@ -35,73 +36,40 @@ const getInitials = (provider: string) => {
 };
 
 const BrandLogo: React.FC<{ item: TestSeriesEntry, className?: string }> = ({ item, className = "w-12 h-12 rounded-xl" }) => {
-  if (item.logo) {
-    return (
-      <img 
-        src={item.logo} 
-        alt={item.provider} 
-        referrerPolicy="no-referrer"
-        className={`${className} object-cover bg-zinc-900 border border-zinc-800 shrink-0 select-none pointer-events-none`}
-      />
-    );
-  }
-
   const initials = getInitials(item.provider);
   return (
-    <div className={`${className} bg-zinc-950 border border-zinc-850 flex items-center justify-center font-mono font-bold text-zinc-350 shrink-0 select-none pointer-events-none uppercase tracking-wider bg-gradient-to-br from-zinc-900 to-zinc-955 shadow-inner`}>
-      {initials}
-    </div>
+    <SafeImage
+      src={item.logo}
+      alt={item.provider}
+      variant="avatar"
+      className={className}
+      fallbackInitials={initials.slice(0, 2)}
+    />
   );
 };
 
 const BrandBanner: React.FC<{ item: TestSeriesEntry }> = ({ item }) => {
-  if (item.bannerUrl) {
-    return (
-      <div className="relative w-full aspect-[21/9] rounded-2xl overflow-hidden border border-zinc-900 mb-6 group bg-zinc-950">
-        <img 
-          src={item.bannerUrl} 
-          alt={`${item.provider} banner`} 
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover select-none pointer-events-none transition-transform duration-700 group-hover:scale-105"
-        />
-        {item.imageSourceUrl && (
-          <a
-            href={item.imageSourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 right-2 bg-black/85 text-[8px] font-mono hover:bg-black text-zinc-400 hover:text-white px-2 py-0.5 rounded border border-zinc-900/60 flex items-center gap-1 transition-all"
-          >
-            <Globe className="w-2.5 h-2.5" />
-            <span>Image Source</span>
-          </a>
-        )}
-      </div>
-    );
-  }
-
-  const initials = getInitials(item.provider);
   return (
-    <div className="relative w-full aspect-[21/9] rounded-2xl overflow-hidden border border-zinc-900 mb-6 bg-gradient-to-br from-[#090909] via-zinc-950 to-[#0c0c0c] flex flex-col items-center justify-center p-6 select-none pointer-events-none">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800/10 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute top-3 left-3 flex items-center gap-1.5 opacity-30">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        <span className="text-[8px] font-mono tracking-widest text-[#808080] uppercase">BIOVISED VERIFIED</span>
-      </div>
-      
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-12 h-12 rounded-xl bg-zinc-950 border border-zinc-850 flex items-center justify-center font-mono font-extrabold text-[#999] text-sm shadow-xl tracking-wider">
-          {initials}
-        </div>
-        <div className="text-center">
-          <span className="text-xs font-bold text-[#808080] tracking-tight uppercase font-mono block">
-            {item.provider}
-          </span>
-          <span className="text-[9px] font-mono text-zinc-600 block uppercase tracking-widest mt-0.5">
-            Academic Performance Audit
-          </span>
-        </div>
-      </div>
+    <div className="relative w-full aspect-[21/9] rounded-2xl overflow-hidden border border-zinc-900 mb-6 group bg-zinc-950">
+      <SafeImage
+        src={item.bannerUrl}
+        alt={item.provider}
+        variant="banner"
+        className="w-full h-full animate-fade-in"
+        imageClassName="transition-transform duration-700 group-hover:scale-105"
+      />
+      {item.bannerUrl && item.imageSourceUrl && (
+        <a
+          href={item.imageSourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-2 right-2 bg-black/85 text-[8px] font-mono hover:bg-black text-zinc-400 hover:text-white px-2 py-0.5 rounded border border-zinc-900/60 flex items-center gap-1 transition-all"
+        >
+          <Globe className="w-2.5 h-2.5" />
+          <span>Image Source</span>
+        </a>
+      )}
     </div>
   );
 };
@@ -111,10 +79,10 @@ const getTrustBadgeStyle = (score: number | null | undefined) => {
     return "bg-zinc-900 border-zinc-800 text-zinc-500";
   }
   if (score >= 75) {
-    return "bg-emerald-950/40 border-emerald-900/60 text-emerald-400";
+    return "bg-white/10 border-white/20 text-[#EEEEEE] font-extrabold";
   }
   if (score >= 50) {
-    return "bg-amber-950/45 border-amber-900/35 text-amber-500";
+    return "bg-zinc-900 border-zinc-805 text-zinc-350";
   }
   return "bg-zinc-900 border-zinc-805 text-zinc-500";
 };
@@ -293,7 +261,7 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                     </span>
                   </div>
                   {item.isVerified ? (
-                    <span className="text-[8px] font-bold tracking-widest text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 px-2 py-1 rounded uppercase">
+                    <span className="text-[8px] font-black tracking-widest text-white bg-white/10 border border-white/20 px-2 py-1 rounded uppercase">
                       verified
                     </span>
                   ) : (
@@ -307,7 +275,7 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
               {/* Verified Product Specifications Grid */}
               <div className="p-5 rounded-2xl bg-zinc-950 border border-zinc-900 space-y-4 text-left">
                 <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-zinc-400">
-                  <Sparkles className="w-4 h-4 text-emerald-450 fill-emerald-400/5 lg:w-4 lg:h-4 shrink-0" />
+                  <Sparkles className="w-4 h-4 text-white fill-white/5 lg:w-4 lg:h-4 shrink-0" />
                   <span>Verified Product Specifications</span>
                 </div>
 
@@ -318,9 +286,9 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                     <span className="text-white font-extrabold">{item.testFormat || 'OMR Paper-based'}</span>
                   </div>
 
-                  <div className="flex justify-between items-center border-b border-zinc-900/65 pb-2">
+                  <div className="flex justify-between items-center border-b border-[#1A1A1A] pb-2">
                     <span className="text-zinc-505 uppercase tracking-wider text-[9px] font-bold">Mocks Pack Count</span>
-                    <span className="text-emerald-400 font-extrabold">
+                    <span className="text-white font-extrabold">
                       {item.testCount ? `${item.testCount} Mock Papers` : 'unverified'}
                     </span>
                   </div>
@@ -416,8 +384,8 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                           <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
                             <div 
                               className={`h-full rounded-full transition-all duration-500 ${
-                                item.trustScore >= 75 ? 'bg-emerald-450' :
-                                item.trustScore >= 50 ? 'bg-amber-450' : 'bg-rose-500'
+                                item.trustScore >= 75 ? 'bg-[#EEEEEE]' :
+                                item.trustScore >= 50 ? 'bg-zinc-600' : 'bg-zinc-800'
                               }`}
                               style={{ width: `${item.trustScore}%` }}
                             />
@@ -429,7 +397,7 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                                 <span>Rating ({item.trustScoreBreakdown.ratingScore}/40)</span>
                               </div>
                               <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                                <div className="bg-emerald-450 h-full" style={{ width: `${(item.trustScoreBreakdown.ratingScore / 40) * 100}%` }} />
+                                <div className="bg-[#EEEEEE] h-full" style={{ width: `${(item.trustScoreBreakdown.ratingScore / 40) * 100}%` }} />
                               </div>
                             </div>
 
@@ -438,7 +406,7 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                                 <span>Volume ({item.trustScoreBreakdown.reviewVolumeScore}/25)</span>
                               </div>
                               <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                                <div className="bg-emerald-450 h-full" style={{ width: `${(item.trustScoreBreakdown.reviewVolumeScore / 25) * 100}%` }} />
+                                <div className="bg-[#EEEEEE] h-full" style={{ width: `${(item.trustScoreBreakdown.reviewVolumeScore / 25) * 100}%` }} />
                               </div>
                             </div>
 
@@ -447,7 +415,7 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                                 <span>Longevity ({item.trustScoreBreakdown.longevityScore}/15)</span>
                               </div>
                               <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                                <div className="bg-emerald-450 h-full" style={{ width: `${(item.trustScoreBreakdown.longevityScore / 15) * 100}%` }} />
+                                <div className="bg-[#EEEEEE] h-full" style={{ width: `${(item.trustScoreBreakdown.longevityScore / 15) * 100}%` }} />
                               </div>
                             </div>
 
@@ -456,7 +424,7 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                                 <span>Transparency ({item.trustScoreBreakdown.transparencyScore}/10)</span>
                               </div>
                               <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                                <div className="bg-emerald-450 h-full" style={{ width: `${(item.trustScoreBreakdown.transparencyScore / 10) * 100}%` }} />
+                                <div className="bg-[#EEEEEE] h-full" style={{ width: `${(item.trustScoreBreakdown.transparencyScore / 10) * 100}%` }} />
                               </div>
                             </div>
 
@@ -465,13 +433,13 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                                 <span>Diversity ({item.trustScoreBreakdown.sourceDiversityScore}/10)</span>
                               </div>
                               <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
-                                <div className="bg-emerald-450 h-full" style={{ width: `${(item.trustScoreBreakdown.sourceDiversityScore / 10) * 100}%` }} />
+                                <div className="bg-[#EEEEEE] h-full" style={{ width: `${(item.trustScoreBreakdown.sourceDiversityScore / 10) * 100}%` }} />
                               </div>
                             </div>
                           </div>
                         </>
                       ) : (
-                        <div className="text-xs text-orange-400 bg-orange-950/20 border border-orange-900/30 p-3 rounded-xl font-mono leading-relaxed">
+                        <div className="text-white bg-white/5 border border-white/10 p-3 rounded-xl font-mono leading-relaxed">
                           ⚠️ Insufficient metrics to compute a reliable Trust Score. Unverified pricing records or lack of qualified peer ratings require physical on-campus validation.
                         </div>
                       )}
@@ -482,23 +450,23 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
                 {/* Trust factors checklists */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 text-[10.5px] font-mono text-zinc-405 border-t border-zinc-900/60 mt-3">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#EEEEEE] shrink-0" />
                     <span>Certified Provider Legitimacy</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${reviews.length > 0 ? 'text-emerald-400' : 'text-zinc-650'}`} />
+                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${reviews.length > 0 ? 'text-[#EEEEEE]' : 'text-zinc-650'}`} />
                     <span className={reviews.length > 0 ? 'text-zinc-350' : 'text-zinc-650'}>
                       Verifiable Peer-Review Citations
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${item.isVerified ? 'text-emerald-400' : 'text-zinc-650'}`} />
+                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${item.isVerified ? 'text-[#EEEEEE]' : 'text-zinc-650'}`} />
                     <span className={item.isVerified ? 'text-zinc-350' : 'text-zinc-650 line-through'}>
                       Official Price Authenticated
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#EEEEEE] shrink-0" />
                     <span>Public DLP Syllabus Disclosure</span>
                   </div>
                 </div>
@@ -547,11 +515,11 @@ export const TestSeriesDetail: React.FC<TestSeriesDetailProps> = ({ id, item, on
 
                 {/* Manual verification flag alert banner */}
                 {item.needsManualVerification && (
-                  <div className="p-3.5 rounded-xl bg-[#c2410c]/10 border border-[#c2410c]/30 text-[10.5px] text-orange-400 flex items-start gap-2.5">
-                    <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
+                  <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-900/30 text-[10.5px] text-indigo-400 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-indigo-500 shrink-0" />
                     <div className="space-y-1">
                       <span className="font-extrabold uppercase tracking-wide block">Manual Check Pending</span>
-                      <p className="text-[10px] text-zinc-350 leading-relaxed">
+                      <p className="text-[10px] text-zinc-350 leading-relaxed font-sans">
                         This entry contains limited public disclosures. Some rates are historically referenced and require manual on-center validation.
                       </p>
                     </div>

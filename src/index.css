@@ -6,16 +6,215 @@
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Inter", ui-monospace, SFMono-Regular, monospace;
   
-  --color-brand-black: #0A0A0A;
-  --color-brand-dark: #111111;
-  --color-brand-border: #262626;
-  --color-brand-gray: #71717A;
-  --color-brand-accent: #FFFFFF;
+  --color-main-bg: #000000;
+  --color-surface-card: #101010;
+  --color-nav-footer: #0F0F0F;
+  --color-border-web: #1A1A1A;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A0A0A0;
+  --color-highlight-element: #F4FEFF;
+  --color-muted-accent: #A9C0E0;
+  --color-neutral-structure: #27262E;
+  --color-secondary-accent: #EEEEEE;
+  --color-ratings: #FFEFD5;
+
+  /* PURGE STANDARD PALETTES: Override Tailwind color families to Black, White, Grey, Ice White, Powder Blue, Charcoal Navy, Platinum, or Papaya Whip strictly */
+  --color-indigo-50: #F4FEFF;
+  --color-indigo-100: #F4FEFF;
+  --color-indigo-200: #A9C0E0;
+  --color-indigo-300: #A9C0E0;
+  --color-indigo-400: #A9C0E0;
+  --color-indigo-500: #F4FEFF;
+  --color-indigo-600: #FFFFFF;
+  --color-indigo-700: #EEEEEE;
+  --color-indigo-800: #1A1A1A;
+  --color-indigo-900: #101010;
+  --color-indigo-950: #0F0F0F;
+
+  --color-blue-50: #F4FEFF;
+  --color-blue-100: #F4FEFF;
+  --color-blue-200: #A9C0E0;
+  --color-blue-300: #A9C0E0;
+  --color-blue-400: #A9C0E0;
+  --color-blue-500: #F4FEFF;
+  --color-blue-600: #FFFFFF;
+  --color-blue-700: #EEEEEE;
+  --color-blue-800: #1A1A1A;
+  --color-blue-900: #101010;
+  --color-blue-950: #0F0F0F;
+
+  --color-sky-50: #F4FEFF;
+  --color-sky-100: #F4FEFF;
+  --color-sky-200: #A9C0E0;
+  --color-sky-300: #A9C0E0;
+  --color-sky-400: #A9C0E0;
+  --color-sky-500: #F4FEFF;
+  --color-sky-600: #FFFFFF;
+  --color-sky-700: #EEEEEE;
+  --color-sky-800: #1A1A1A;
+  --color-sky-900: #101010;
+  --color-sky-950: #0F0F0F;
+
+  --color-cyan-50: #F4FEFF;
+  --color-cyan-100: #F4FEFF;
+  --color-cyan-200: #A9C0E0;
+  --color-cyan-300: #A9C0E0;
+  --color-cyan-400: #A9C0E0;
+  --color-cyan-500: #F4FEFF;
+  --color-cyan-600: #FFFFFF;
+  --color-cyan-700: #EEEEEE;
+  --color-cyan-800: #1A1A1A;
+  --color-cyan-900: #101010;
+  --color-cyan-950: #0F0F0F;
+
+  --color-teal-50: #F4FEFF;
+  --color-teal-100: #F4FEFF;
+  --color-teal-200: #A9C0E0;
+  --color-teal-300: #A9C0E0;
+  --color-teal-400: #A9C0E0;
+  --color-teal-500: #F4FEFF;
+  --color-teal-600: #FFFFFF;
+  --color-teal-700: #EEEEEE;
+  --color-teal-800: #1A1A1A;
+  --color-teal-900: #101010;
+  --color-teal-950: #0F0F0F;
+
+  --color-emerald-50: #F4FEFF;
+  --color-emerald-100: #F4FEFF;
+  --color-emerald-200: #A9C0E0;
+  --color-emerald-300: #A9C0E0;
+  --color-emerald-400: #A9C0E0;
+  --color-emerald-500: #F4FEFF;
+  --color-emerald-600: #FFFFFF;
+  --color-emerald-700: #EEEEEE;
+  --color-emerald-800: #1A1A1A;
+  --color-emerald-900: #101010;
+  --color-emerald-950: #0F0F0F;
+
+  --color-green-50: #F4FEFF;
+  --color-green-100: #F4FEFF;
+  --color-green-200: #A9C0E0;
+  --color-green-300: #A9C0E0;
+  --color-green-400: #A9C0E0;
+  --color-green-500: #F4FEFF;
+  --color-green-600: #FFFFFF;
+  --color-green-700: #EEEEEE;
+  --color-green-800: #1A1A1A;
+  --color-green-900: #101010;
+  --color-green-950: #0F0F0F;
+
+  --color-rose-50: #F4FEFF;
+  --color-rose-100: #F4FEFF;
+  --color-rose-200: #A9C0E0;
+  --color-rose-300: #A9C0E0;
+  --color-rose-400: #A9C0E0;
+  --color-rose-500: #F4FEFF;
+  --color-rose-600: #FFFFFF;
+  --color-rose-700: #EEEEEE;
+  --color-rose-800: #1A1A1A;
+  --color-rose-900: #101010;
+  --color-rose-950: #0F0F0F;
+
+  --color-red-50: #FFFFFF;
+  --color-red-100: #FFFFFF;
+  --color-red-200: #EEEEEE;
+  --color-red-300: #A9C0E0;
+  --color-red-400: #A9C0E0;
+  --color-red-500: #F4FEFF;
+  --color-red-600: #FFFFFF;
+  --color-red-700: #EEEEEE;
+  --color-red-800: #1A1A1A;
+  --color-red-900: #101010;
+  --color-red-950: #0F0F0F;
+
+  --color-pink-50: #F4FEFF;
+  --color-pink-100: #F4FEFF;
+  --color-pink-200: #A9C0E0;
+  --color-pink-300: #A9C0E0;
+  --color-pink-400: #A9C0E0;
+  --color-pink-500: #F4FEFF;
+  --color-pink-600: #FFFFFF;
+  --color-pink-700: #EEEEEE;
+  --color-pink-800: #1A1A1A;
+  --color-pink-900: #101010;
+  --color-pink-950: #0F0F0F;
+
+  --color-fuchsia-50: #F4FEFF;
+  --color-fuchsia-100: #F4FEFF;
+  --color-fuchsia-200: #A9C0E0;
+  --color-fuchsia-300: #A9C0E0;
+  --color-fuchsia-400: #A9C0E0;
+  --color-fuchsia-500: #F4FEFF;
+  --color-fuchsia-600: #FFFFFF;
+  --color-fuchsia-700: #EEEEEE;
+  --color-fuchsia-800: #1A1A1A;
+  --color-fuchsia-900: #101010;
+  --color-fuchsia-950: #0F0F0F;
+
+  --color-purple-50: #F4FEFF;
+  --color-purple-100: #F4FEFF;
+  --color-purple-200: #A9C0E0;
+  --color-purple-300: #A9C0E0;
+  --color-purple-400: #A9C0E0;
+  --color-purple-500: #F4FEFF;
+  --color-purple-600: #FFFFFF;
+  --color-purple-700: #EEEEEE;
+  --color-purple-800: #1A1A1A;
+  --color-purple-900: #101010;
+  --color-purple-950: #0F0F0F;
+
+  --color-violet-50: #F4FEFF;
+  --color-violet-100: #F4FEFF;
+  --color-violet-200: #A9C0E0;
+  --color-violet-300: #A9C0E0;
+  --color-violet-400: #A9C0E0;
+  --color-violet-500: #F4FEFF;
+  --color-violet-600: #FFFFFF;
+  --color-violet-700: #EEEEEE;
+  --color-violet-800: #1A1A1A;
+  --color-violet-900: #101010;
+  --color-violet-950: #0F0F0F;
+
+  --color-orange-50: #F4FEFF;
+  --color-orange-100: #F4FEFF;
+  --color-orange-200: #A9C0E0;
+  --color-orange-300: #A9C0E0;
+  --color-orange-400: #A9C0E0;
+  --color-orange-500: #F4FEFF;
+  --color-orange-600: #FFFFFF;
+  --color-orange-700: #EEEEEE;
+  --color-orange-800: #1A1A1A;
+  --color-orange-900: #101010;
+  --color-orange-950: #0F0F0F;
+
+  --color-amber-50: #101010;
+  --color-amber-100: #101010;
+  --color-amber-200: #1A1A1A;
+  --color-amber-300: #A0A0A0;
+  --color-amber-400: #EEEEEE;
+  --color-amber-500: #FFEFD5; /* ratings papaya whip! */
+  --color-amber-600: #FFEFD5;
+  --color-amber-700: #FFEFD5;
+  --color-amber-800: #1A1A1A;
+  --color-amber-900: #101010;
+  --color-amber-950: #0F0F0F;
+
+  --color-yellow-50: #101010;
+  --color-yellow-100: #101010;
+  --color-yellow-200: #1A1A1A;
+  --color-yellow-300: #A0A0A0;
+  --color-yellow-400: #EEEEEE;
+  --color-yellow-500: #FFEFD5; /* ratings papaya whip! */
+  --color-yellow-600: #FFEFD5;
+  --color-yellow-700: #FFEFD5;
+  --color-yellow-800: #1A1A1A;
+  --color-yellow-900: #101010;
+  --color-yellow-950: #0F0F0F;
 }
 
 /* Base custom styles to reinforce pitch dark minimal Google AI Studio styling */
 body {
-  background-color: #0A0A0A;
+  background-color: #000000;
   color: #FFFFFF;
   font-family: var(--font-sans);
 }

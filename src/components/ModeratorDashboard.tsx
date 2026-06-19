@@ -61,17 +61,41 @@ import {
   Play,
   Trash2,
   History,
-  Layers
+  Layers,
+  Sliders,
+  Users
 } from 'lucide-react';
 
 import YouTubeImporterTab from './YouTubeImporterTab';
 import ContentManagerTab from './ContentManagerTab';
+import { SafeImage } from './SafeImage';
+import BlockBuilder from './admin/BlockBuilder';
+import TeacherManager from './admin/TeacherManager';
+import InstituteManager from './admin/InstituteManager';
+import BatchManager from './admin/BatchManager';
+import ReviewModerator from './admin/ReviewModerator';
+import TestSeriesConsole from './admin/TestSeriesConsole';
+import AuditLogsView from './admin/AuditLogsView';
 
 export default function ModeratorDashboard() {
   const { user } = useAuth();
   
   // Tab states
-  const [activeTab, setActiveTab] = useState<'reports' | 'youtube' | 'verification' | 'lectures' | 'content_manager' | 'cdn_cache'>('reports');
+  const [activeTab, setActiveTab] = useState<
+    | 'reports'
+    | 'youtube'
+    | 'verification'
+    | 'lectures'
+    | 'content_manager'
+    | 'cdn_cache'
+    | 'theme_editor'
+    | 'teachers_directory'
+    | 'institutes_directory'
+    | 'batches_directory'
+    | 'reviews_moderation'
+    | 'tests_authoring'
+    | 'system_audit_logs'
+  >('reports');
 
   // CDN cache test console states
   const [cdnTestLogs, setCdnTestLogs] = useState<string[]>([]);
@@ -1512,20 +1536,27 @@ export default function ModeratorDashboard() {
             Biovised Admin Hub
           </h2>
           <p className="text-xs text-zinc-450 font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
             Secure administrative control portal • Active Admin: {user.displayName}
           </p>
         </div>
 
         {/* Tab Selection Row (Borderless and elegant like home screen segment options) */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 border-b border-zinc-900/60 pb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3 border-b border-zinc-900/60 pb-5">
           {[
-            { id: 'reports', label: 'Report Invariants', icon: ShieldAlert, color: 'text-orange-500 hover:text-orange-400', desc: 'Manage user reports' },
-            { id: 'youtube', label: 'YouTube Ingestion', icon: Youtube, color: 'text-rose-500 hover:text-rose-400', desc: 'Sync playlist lectures' },
-            { id: 'verification', label: 'Verifier Queue', icon: ShieldCheck, color: 'text-emerald-500 hover:text-emerald-400', desc: 'Approve profiles/institutes' },
-            { id: 'lectures', label: 'Lectures Approval', icon: BookOpen, color: 'text-sky-450 hover:text-sky-400', desc: 'Moderate class videos' },
-            { id: 'content_manager', label: 'Content Manager', icon: Database, color: 'text-orange-500 hover:text-orange-400', desc: 'Database CRUD controls' },
-            { id: 'cdn_cache', label: 'CDN Cache Spec', icon: Activity, color: 'text-pink-500 hover:text-pink-400', desc: 'Test Edge CDN caching' }
+            { id: 'reports', label: 'Report Invariants', icon: ShieldAlert, color: 'text-[#A9C0E0] hover:text-[#F4FEFF]', desc: 'Manage user reports' },
+            { id: 'youtube', label: 'YouTube Ingestion', icon: Youtube, color: 'text-[#EEEEEE] hover:text-[#FFFFFF]', desc: 'Sync playlist lectures' },
+            { id: 'verification', label: 'Verifier Queue', icon: ShieldCheck, color: 'text-[#A9C0E0] hover:text-[#F4FEFF]', desc: 'Approve profiles/institutes' },
+            { id: 'lectures', label: 'Lectures Approval', icon: BookOpen, color: 'text-[#EEEEEE] hover:text-[#FFFFFF]', desc: 'Moderate class videos' },
+            { id: 'content_manager', label: 'Content Manager', icon: Database, color: 'text-[#A9C0E0] hover:text-[#F4FEFF]', desc: 'Database CRUD controls' },
+            { id: 'cdn_cache', label: 'CDN Cache Spec', icon: Activity, color: 'text-[#EEEEEE] hover:text-[#FFFFFF]', desc: 'Test Edge CDN caching' },
+            { id: 'theme_editor', label: 'Theme Blocks', icon: Sliders, color: 'text-[#A9C0E0] hover:text-[#F4FEFF]', desc: 'Shopify Layout Builder' },
+            { id: 'teachers_directory', label: 'Educators Directory', icon: Users, color: 'text-[#EEEEEE] hover:text-[#FFFFFF]', desc: 'Assign and claim overrides' },
+            { id: 'institutes_directory', label: 'Institutes Directory', icon: Building, color: 'text-[#A9C0E0] hover:text-[#F4FEFF]', desc: 'Manage institute profiles' },
+            { id: 'batches_directory', label: 'Batches & Courses', icon: Layers, color: 'text-[#EEEEEE] hover:text-[#FFFFFF]', desc: 'Manage batches and pricing' },
+            { id: 'reviews_moderation', label: 'Reviews Moderation', icon: ShieldAlert, color: 'text-[#A9C0E0] hover:text-[#F4FEFF]', desc: 'Audit student reviews' },
+            { id: 'tests_authoring', label: 'Test Series Console', icon: FileText, color: 'text-[#EEEEEE] hover:text-[#FFFFFF]', desc: 'Author tests & PYQs' },
+            { id: 'system_audit_logs', label: 'System Audit Logs', icon: Terminal, color: 'text-zinc-400 hover:text-zinc-300', desc: 'Track administrative history' }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1598,7 +1629,7 @@ export default function ModeratorDashboard() {
                 <div
                   key={report.id}
                   className={`border rounded-xl p-5 space-y-3 bg-zinc-950 ${
-                    report.status === 'pending' ? 'border-orange-500/30' : 'border-zinc-800'
+                    report.status === 'pending' ? 'border-indigo-500/30' : 'border-zinc-800'
                   }`}
                 >
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -1696,7 +1727,7 @@ export default function ModeratorDashboard() {
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-sm font-display font-medium text-white tracking-tight flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-orange-500" />
+                  <ShieldAlert className="w-4 h-4 text-indigo-500" />
                   Flagged YouTube & Platform Student Reviews
                 </h3>
                 <p className="text-xs text-brand-gray font-mono mt-1">
@@ -1722,7 +1753,7 @@ export default function ModeratorDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {flaggedReviews.map((review) => (
-                  <div key={review.id} className="border border-orange-500/25 bg-[#0D0D0D] rounded-xl p-5 space-y-4 hover:border-orange-500/40 transition-colors flex flex-col justify-between">
+                  <div key={review.id} className="border border-indigo-500/25 bg-[#0D0D0D] rounded-xl p-5 space-y-4 hover:border-indigo-500/40 transition-colors flex flex-col justify-between">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start gap-2">
                         <div>
@@ -1822,7 +1853,7 @@ export default function ModeratorDashboard() {
                   type="button"
                   onClick={() => { setSelectedEntityType('teacher'); setSelectedEntityForVerify(null); setProfilingResult(null); }}
                   className={`flex-1 text-xs font-mono py-2 rounded-lg cursor-pointer transition-all ${
-                    selectedEntityType === 'teacher' ? 'bg-orange-600 text-white font-medium' : 'text-zinc-400 hover:text-white'
+                    selectedEntityType === 'teacher' ? 'bg-indigo-600 text-white font-medium' : 'text-zinc-400 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-1.5 uppercase font-medium">
@@ -1833,7 +1864,7 @@ export default function ModeratorDashboard() {
                   type="button"
                   onClick={() => { setSelectedEntityType('institute'); setSelectedEntityForVerify(null); setProfilingResult(null); }}
                   className={`flex-1 text-xs font-mono py-2 rounded-lg cursor-pointer transition-all ${
-                    selectedEntityType === 'institute' ? 'bg-orange-600 text-white font-medium' : 'text-zinc-400 hover:text-white'
+                    selectedEntityType === 'institute' ? 'bg-indigo-600 text-white font-medium' : 'text-zinc-400 hover:text-white'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-1.5 uppercase font-medium">
@@ -1853,7 +1884,7 @@ export default function ModeratorDashboard() {
                       onClick={() => setVerificationFilter(f)}
                       className={`text-[10px] uppercase font-mono py-1 px-2.5 rounded border transition-all cursor-pointer ${
                         verificationFilter === f
-                          ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
                           : 'border-transparent text-zinc-500 hover:text-zinc-300'
                       }`}
                     >
@@ -1880,16 +1911,18 @@ export default function ModeratorDashboard() {
                           onClick={() => handleRunProfiler(teacher, 'teacher')}
                           className={`p-4 border rounded-xl w-full text-left transition-all cursor-pointer hover:border-zinc-700 ${
                             selectedEntityForVerify?.id === teacher.id
-                              ? 'border-orange-500 bg-zinc-900/40 ring-1 ring-orange-500/30'
+                              ? 'border-indigo-500 bg-zinc-900/40 ring-1 ring-indigo-500/30'
                               : 'border-zinc-850 bg-zinc-950/20'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3">
-                              <img
+                              <SafeImage
                                 src={teacher.avatar}
                                 alt={teacher.name}
-                                className="w-10 h-10 rounded-full border border-zinc-750 object-cover"
+                                variant="avatar"
+                                className="w-10 h-10 rounded-full border border-zinc-750"
+                                fallbackInitials={teacher.name ? teacher.name.slice(0, 2) : 'TR'}
                               />
                               <div>
                                 <h4 className="text-sm font-semibold text-brand-accent">{teacher.name}</h4>
@@ -1901,7 +1934,7 @@ export default function ModeratorDashboard() {
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                 : status === 'rejected'
                                 ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                : 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/35'
                             }`}>
                               {status}
                             </span>
@@ -1910,7 +1943,7 @@ export default function ModeratorDashboard() {
                           {teacher.kgEntityId && (
                             <div className="mt-2.5 pt-2 border-t border-zinc-900 flex items-center justify-between text-[10px] font-mono text-zinc-500">
                               <span>KG ID: {teacher.kgEntityId}</span>
-                              <span className="text-[9px] text-orange-400 font-mono">Score: {teacher.trustScore}%</span>
+                              <span className="text-[9px] text-indigo-400 font-mono">Score: {teacher.trustScore}%</span>
                             </div>
                           )}
                         </div>
@@ -1931,16 +1964,19 @@ export default function ModeratorDashboard() {
                           onClick={() => handleRunProfiler(inst, 'institute')}
                           className={`p-4 border rounded-xl w-full text-left transition-all cursor-pointer hover:border-zinc-700 ${
                             selectedEntityForVerify?.id === inst.id
-                              ? 'border-orange-500 bg-zinc-900/40 ring-1 ring-orange-500/30'
+                              ? 'border-indigo-500 bg-zinc-900/40 ring-1 ring-indigo-500/30'
                               : 'border-zinc-850 bg-zinc-950/20'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3">
-                              <img
+                              <SafeImage
                                 src={inst.logo}
                                 alt={inst.name}
-                                className="w-10 h-10 rounded-lg border border-zinc-750 object-cover"
+                                variant="avatar"
+                                className="w-10 h-10 rounded-lg border border-zinc-750 aspect-square object-contain"
+                                imageClassName="aspect-square object-contain"
+                                fallbackInitials={inst.name ? inst.name.slice(0, 2) : 'IN'}
                               />
                               <div>
                                 <h4 className="text-sm font-semibold text-brand-accent">{inst.name}</h4>
@@ -1952,7 +1988,7 @@ export default function ModeratorDashboard() {
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                 : status === 'rejected'
                                 ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                : 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/35'
                             }`}>
                               {status}
                             </span>
@@ -1961,7 +1997,7 @@ export default function ModeratorDashboard() {
                           {inst.kgEntityId && (
                             <div className="mt-2.5 pt-2 border-t border-zinc-900 flex items-center justify-between text-[10px] font-mono text-zinc-500">
                               <span>KG ID: {inst.kgEntityId}</span>
-                              <span className="text-[9px] text-orange-400 font-mono">Score: {inst.trustScore}%</span>
+                              <span className="text-[9px] text-indigo-400 font-mono">Score: {inst.trustScore}%</span>
                             </div>
                           )}
                         </div>
@@ -1978,10 +2014,13 @@ export default function ModeratorDashboard() {
 
                   {/* Selected Entity Card info */}
                   <div className="flex flex-col sm:flex-row gap-4 items-start pb-4 border-b border-zinc-850 text-left">
-                    <img
+                    <SafeImage
                       src={'avatar' in selectedEntityForVerify ? selectedEntityForVerify.avatar : selectedEntityForVerify.logo}
                       alt={selectedEntityForVerify.name}
-                      className="w-16 h-16 rounded-xl border border-zinc-700 object-cover"
+                      variant="avatar"
+                      className="w-16 h-16 rounded-xl border border-zinc-700 aspect-square object-contain"
+                      imageClassName="aspect-square object-contain"
+                      fallbackInitials={selectedEntityForVerify.name ? selectedEntityForVerify.name.slice(0, 2) : 'TR'}
                     />
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -2008,7 +2047,7 @@ export default function ModeratorDashboard() {
                               href={link}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[10px] text-orange-400 font-mono flex items-center gap-1 bg-orange-500/05 hover:bg-orange-500/10 border border-orange-500/25 px-2 py-0.5 rounded transition-all"
+                              className="text-[10px] text-indigo-400 font-mono flex items-center gap-1 bg-indigo-500/05 hover:bg-indigo-500/10 border border-indigo-500/25 px-2 py-0.5 rounded transition-all"
                             >
                               <ExternalLink className="w-2.5 h-2.5" /> {link.replace('https://', '').replace('www.', '').substring(0, 25)}...
                             </a>
@@ -2021,7 +2060,7 @@ export default function ModeratorDashboard() {
                   {/* Automated Evaluation trigger & logs */}
                   {profilingLoading ? (
                     <div className="py-12 flex flex-col items-center justify-center space-y-3 font-mono text-xs text-brand-gray text-center">
-                      <RefreshCw className="w-8 h-8 text-orange-500 animate-spin" />
+                      <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
                       <p>Connecting to Google Knowledge Graph Search API services...</p>
                       <p className="text-[10px] text-zinc-650">Checking schema.org parameters & official whitelisted index matches...</p>
                     </div>
@@ -2128,7 +2167,7 @@ export default function ModeratorDashboard() {
                       </div>
 
                       {/* Consensus Verdict Assessment */}
-                      <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20 space-y-2 text-left">
+                      <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20 space-y-2 text-left">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-brand-accent font-mono uppercase">Consensus Verdict Check</span>
                           <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border ${
@@ -2161,7 +2200,7 @@ export default function ModeratorDashboard() {
                             type="button"
                             disabled={recalibratingId === selectedEntityForVerify.id}
                             onClick={handleRecalibrateTrust}
-                            className="bg-orange-600/10 hover:bg-orange-600/20 active:bg-orange-600/30 border border-orange-500/30 text-orange-400 text-[10px] font-mono px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                            className="bg-indigo-600/10 hover:bg-indigo-600/20 active:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 text-[10px] font-mono px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${recalibratingId === selectedEntityForVerify.id ? 'animate-spin' : ''}`} />
                             Recalibrate Score
@@ -2172,7 +2211,7 @@ export default function ModeratorDashboard() {
                           <div className={`p-2.5 rounded-lg text-[10px] font-mono leading-normal ${
                             recalibrateState.startsWith('Error') 
                               ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
-                              : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                              : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
                           }`}>
                             {recalibrateState}
                           </div>
@@ -2227,7 +2266,7 @@ export default function ModeratorDashboard() {
                       <button
                         type="button"
                         onClick={() => handleRunProfiler(selectedEntityForVerify, selectedEntityType)}
-                        className="mt-2 bg-orange-600 hover:bg-orange-500 text-white font-mono text-xs px-5 py-2.5 rounded-lg font-medium cursor-pointer transition-colors flex items-center gap-1"
+                        className="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs px-5 py-2.5 rounded-lg font-medium cursor-pointer transition-colors flex items-center gap-1"
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Initialize Verification Profiler
                       </button>
@@ -2405,7 +2444,7 @@ export default function ModeratorDashboard() {
                                 <span className="bg-zinc-800 text-zinc-400 text-[8px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
                                   {item.examType}
                                 </span>
-                                <span className="bg-[#141415] text-[#2DD4BF] text-[8px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
+                                <span className="bg-zinc-800 text-zinc-300 text-[8px] font-mono uppercase tracking-wider px-2 py-0.5 rounded">
                                   {item.contentType}
                                 </span>
                               </div>
@@ -2573,7 +2612,7 @@ export default function ModeratorDashboard() {
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-widest bg-pink-500/10 text-pink-400 border border-pink-500/20">
                   Infrastructure Spec (Phase 4)
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-widest bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                   Cloudflare Gateway
                 </span>
               </div>
@@ -2694,7 +2733,7 @@ export default function ModeratorDashboard() {
                 </div>
                 <div className="flex justify-between items-center text-[10px] font-mono">
                   <span className="text-zinc-550">CDN Target Topography:</span>
-                  <span className="text-orange-400 font-bold">Cloudflare Enterprise</span>
+                  <span className="text-indigo-400 font-bold">Cloudflare Enterprise</span>
                 </div>
                 
                 <button
@@ -2768,6 +2807,48 @@ export default function ModeratorDashboard() {
 
           </div>
 
+        </div>
+      )}
+
+      {activeTab === 'theme_editor' && (
+        <div className="animate-fade-in">
+          <BlockBuilder />
+        </div>
+      )}
+
+      {activeTab === 'teachers_directory' && (
+        <div className="animate-fade-in">
+          <TeacherManager />
+        </div>
+      )}
+
+      {activeTab === 'institutes_directory' && (
+        <div className="animate-fade-in">
+          <InstituteManager />
+        </div>
+      )}
+
+      {activeTab === 'batches_directory' && (
+        <div className="animate-fade-in">
+          <BatchManager />
+        </div>
+      )}
+
+      {activeTab === 'reviews_moderation' && (
+        <div className="animate-fade-in">
+          <ReviewModerator />
+        </div>
+      )}
+
+      {activeTab === 'tests_authoring' && (
+        <div className="animate-fade-in">
+          <TestSeriesConsole />
+        </div>
+      )}
+
+      {activeTab === 'system_audit_logs' && (
+        <div className="animate-fade-in">
+          <AuditLogsView />
         </div>
       )}
 
