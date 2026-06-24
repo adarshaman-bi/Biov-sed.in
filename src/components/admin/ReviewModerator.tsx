@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db, collection, doc, getDocs, setDoc, deleteDoc } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { logAdminAction } from '../../services/adminService';
 import {

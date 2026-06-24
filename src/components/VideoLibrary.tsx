@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from '../firebase';
-import { useAuth } from '../context/AuthContext';
-import { useSearch } from '../context/SearchContext';
-import {
+import { 
+  db,
   collection,
   query,
   limit,
   getDocs,
   where,
   orderBy,
-  onSnapshot
-} from 'firebase/firestore';
+  onSnapshot 
+} from '../firebase';
+import { useAuth } from '../context/AuthContext';
+import { useSearch } from '../context/SearchContext';
 import {
   Play,
   Search,
@@ -597,7 +597,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
               <span className="p-1.5 bg-white/10 rounded-lg border border-white/20">
                 <Youtube className="w-4 h-4 text-white" />
               </span>
-              <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider text-white">Verse <span className="text-[#EEEEEE] font-mono text-xs">Video Library</span></h2>
+              <h2 className="text-base sm:text-lg font-bold font-display uppercase tracking-wider text-white">Playlist <span className="text-[#EEEEEE] font-mono text-xs">Video Library</span></h2>
             </div>
           </div>
         </div>
@@ -760,33 +760,35 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                 description: selectedChannel.description
               }}
               onBack={() => setSelectedChannel(null)}
-            />
-
-            {/* Render Playlists for this channel */}
+            />            {/* Render Playlists for this channel */}
             <div className="space-y-4 pt-4">
               <div className="border-b border-[#1A1A1A] pb-2 flex justify-between items-center">
                 <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">Curated Course Playlists</h3>
                 <span className="text-[9px] font-mono text-zinc-500 uppercase">Interactive Hub</span>
               </div>
-              {playlists.filter(p => p.channelId === selectedChannel.channelId).length === 0 ? (
+              {(playlists || []).filter(p => p.channelId === selectedChannel.channelId).length === 0 ? (
                 <p className="text-xs text-zinc-500 font-mono py-12 text-center bg-[#09090A] border border-neutral-900 rounded-xl">No playlists registered for this channel yet.</p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                  {playlists.filter(p => p.channelId === selectedChannel.channelId).map((play) => (
+                <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x scroll-smooth">
+                  {(playlists || []).filter(p => p.channelId === selectedChannel.channelId).map((play) => (
                     <div
                       key={play.id}
                       onClick={() => setSelectedPlaylist(play)}
-                      className="bg-[#0E0E0F] border border-neutral-850 hover:border-zinc-700 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col group shadow-lg"
+                      className="w-[280px] shrink-0 snap-start bg-transparent rounded-xl overflow-hidden cursor-pointer flex flex-col group text-left"
                     >
-                      <div className="relative aspect-video bg-neutral-950 overflow-hidden">
+                      <motion.div
+                        whileHover={{ scale: 1.04 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                        className="relative aspect-video bg-neutral-950 overflow-hidden rounded-xl"
+                      >
                         <img
                           src={getPlaylistThumbnail(play)}
                           alt={play.title}
-                          className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-305"
+                          className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
                         />
-                      </div>
-                      <div className="p-4 flex-grow flex flex-col justify-between">
+                      </motion.div>
+                      <div className="pt-3 pb-1 flex-grow flex flex-col justify-between">
                         <h4 className="text-xs font-bold text-white uppercase line-clamp-2 leading-tight group-hover:text-white transition-colors">{play.title}</h4>
                         <p className="text-[10px] text-zinc-500 font-sans mt-2">{play.videoCount || 0} Lectures</p>
                       </div>
@@ -803,7 +805,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
             
             {/* SUBJECT STREAM TABS CONTROLLER */}
             <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none border-b border-[#18181B]">
-              {SUBJECT_TABS.map((sub) => (
+              {(SUBJECT_TABS || []).map((sub) => (
                 <button
                   key={sub}
                   onClick={() => setSelectedSubject(sub)}
@@ -825,33 +827,37 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">Featured Chapters</h3>
               </div>
 
-              {filteredFeaturedPlaylists.length === 0 ? (
+              {(filteredFeaturedPlaylists || []).length === 0 ? (
                 <div className="text-center py-10 rounded-xl bg-neutral-900/40 border border-neutral-910">
                   <p className="text-xs text-zinc-550 font-mono">No chapter playlists synced for the {selectedSubject} subject yet.</p>
                 </div>
               ) : (
-                <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-amber pl-0.5">
-                  {filteredFeaturedPlaylists.map((play) => (
+                <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x scroll-smooth">
+                  {(filteredFeaturedPlaylists || []).map((play) => (
                     <div
                       key={play.id}
                       onClick={() => setSelectedPlaylist(play)}
-                      className="min-w-[210px] w-[210px] xs:min-w-[260px] xs:w-[260px] bg-[#0E0E0F] border border-neutral-850 hover:border-zinc-700 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col shrink-0 text-left group elevation-3 hover:scale-[1.015]"
+                      className="w-[280px] shrink-0 snap-start bg-transparent rounded-xl overflow-hidden cursor-pointer flex flex-col group text-left"
                     >
-                      <div className="relative aspect-video bg-neutral-950 overflow-hidden">
+                      <motion.div
+                        whileHover={{ scale: 1.04 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                        className="relative aspect-video bg-neutral-950 overflow-hidden rounded-xl"
+                      >
                         <img
                           src={getPlaylistThumbnail(play)}
                           alt={play.title}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-104 shadow"
+                          className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
                         />
-                        <div className="absolute right-2 bottom-2 bg-black/85 border border-zinc-850 text-[9.5px] px-2 py-0.5 rounded font-mono font-bold text-zinc-300">
+                        <div className="absolute right-2 bottom-2 bg-black/85 border border-zinc-850 text-[9.5px] px-2 py-0.5 rounded font-mono font-bold text-zinc-300 z-10">
                           {play.lecturesCount || play.videoCount || 0} Lectures
                         </div>
-                      </div>
-                      <div className="p-3 flex-1 flex flex-col justify-between items-start space-y-2">
+                      </motion.div>
+                      <div className="pt-3 pb-1 flex-1 flex flex-col justify-between items-start space-y-1">
                         <div className="space-y-1 w-full">
-                          <span className="text-[9px] text-[#A0A0A0] font-mono uppercase bg-white/10 px-1.5 py-0.5 rounded font-bold">{play.subject}</span>
-                          <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 truncate w-full uppercase">{play.title}</h4>
+                          <span className="text-[9.5px] text-[#A0A0A0] font-mono uppercase bg-zinc-900/60 px-1.5 py-0.5 rounded font-bold inline-block">{play.subject}</span>
+                          <h4 className="text-xs font-bold text-white line-clamp-2 w-full uppercase leading-tight mt-1">{play.title}</h4>
                         </div>
                         <p className="text-[10px] text-zinc-500 font-sans truncate w-full leading-none">
                           {play.channelName || 'BIOVISED Educator'}
@@ -864,25 +870,23 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
             </div>
 
             {/* B. CONTINUE WATCHING PROGRESS ROW (SAVED STATE HISTORY) */}
-            {watchHistory.length > 0 && (
+            {(watchHistory || []).length > 0 && (
               <div className="space-y-4">
                 <div>
                   <span className="text-[9px] font-mono text-[#EEEEEE] tracking-widest font-extrabold uppercase block">RESUME LEARNING</span>
                   <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">Continue Watching</h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {watchHistory.slice(0, 3).map((item) => {
+                <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x scroll-smooth">
+                  {(watchHistory || []).slice(0, 10).map((item) => {
                     const progressPercent = Math.max(3, Math.min(100, Math.floor((item.progressSeconds / item.durationSeconds) * 100)));
                     return (
                       <div
                         key={item.videoId}
                         onClick={() => {
-                          // Jump directly to watching that video
-                          const matchedPlay = playlists.find(p => p.id === item.playlistId);
+                          const matchedPlay = (playlists || []).find(p => p.id === item.playlistId);
                           if (matchedPlay) setSelectedPlaylist(matchedPlay);
                           
-                          // Convert saved history item back into a partial YouTubeVideo representation
                           const partialVideo: YouTubeVideo = {
                             id: item.videoId,
                             videoId: item.videoId,
@@ -906,22 +910,26 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                           };
                           setSelectedVideo(partialVideo);
                         }}
-                        className="bg-[#101010] border border-[#1A1A1A] rounded-xl overflow-hidden flex gap-3 p-3 items-center hover:border-zinc-700 transition-all cursor-pointer group"
+                        className="w-[280px] shrink-0 snap-start bg-transparent rounded-xl overflow-hidden cursor-pointer flex flex-col group text-left"
                       >
-                        <div className="relative w-24 aspect-video shrink-0 rounded-lg overflow-hidden bg-neutral-900 shadow">
+                        <motion.div
+                          whileHover={{ scale: 1.04 }}
+                          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                          className="relative aspect-video rounded-xl overflow-hidden bg-neutral-900 shadow"
+                        >
                           <YoutubeThumbnailImg
                             videoId={item.videoId}
                             alt={item.title}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute bottom-0 left-0 w-full h-1 bg-neutral-800">
+                          <div className="absolute bottom-0 left-0 w-full h-1 bg-neutral-800 z-10">
                             <div className="h-full bg-white" style={{ width: `${progressPercent}%` }} />
                           </div>
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-1 text-left">
-                          <span className="text-[8px] font-mono text-[#A0A0A0] uppercase block font-semibold">{item.subject}</span>
-                          <h4 className="text-xs font-bold text-white leading-tight line-clamp-1 group-hover:text-white transition-colors">{item.title}</h4>
-                          <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-0.5">
+                        </motion.div>
+                        <div className="pt-3 pb-1 min-w-0 space-y-1 text-left">
+                          <span className="text-[9.5px] font-mono text-[#A0A0A0] uppercase block font-semibold">{item.subject}</span>
+                          <h4 className="text-xs font-bold text-white leading-tight line-clamp-2 uppercase">{item.title}</h4>
+                          <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-1">
                             <span>{item.channelName}</span>
                             <span className="text-[9px] text-[#EEEEEE] font-extrabold">{progressPercent}% done</span>
                           </div>
@@ -931,45 +939,51 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                   })}
                 </div>
               </div>
-            )}            {/* C. NEW THIS WEEK IMPORTED VIDEOS ROW */}
+            )}
+
+            {/* C. NEW THIS WEEK IMPORTED VIDEOS ROW */}
             <div className="space-y-4">
               <div>
                 <span className="text-[9px] font-mono text-[#EEEEEE] tracking-widest font-extrabold uppercase block">FRESH CLASSES</span>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">New This Week</h3>
               </div>
 
-              {recentWeekVideos.length === 0 ? (
+              {(recentWeekVideos || []).length === 0 ? (
                 <div className="text-center py-8 rounded-xl border border-neutral-900 bg-neutral-955/20">
-                  <p className="text-xs text-zinc-600 font-mono uppercase tracking-wider">No new classes imported in past 7 days. Sync channels via Content Manager.</p>
+                  <p className="text-xs text-zinc-650 font-mono uppercase tracking-wider">No new classes imported in past 7 days. Sync channels via Content Manager.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  {recentWeekVideos.slice(0, 6).map((vid) => (
+                <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x scroll-smooth">
+                  {(recentWeekVideos || []).slice(0, 10).map((vid) => (
                     <div
                       key={vid.videoId}
                       onClick={() => {
-                        const matchedPlay = playlists.find(p => p.id === vid.playlistId);
+                        const matchedPlay = (playlists || []).find(p => p.id === vid.playlistId);
                         if (matchedPlay) setSelectedPlaylist(matchedPlay);
                         setSelectedVideo(vid);
                       }}
-                      className="bg-[#0C0C0D] border border-neutral-855 hover:border-zinc-700 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col h-full group"
+                      className="w-[280px] shrink-0 snap-start bg-transparent rounded-xl overflow-hidden cursor-pointer flex flex-col group text-left"
                     >
-                      <div className="relative aspect-video bg-neutral-955 overflow-hidden shadow shrink-0">
+                      <motion.div
+                        whileHover={{ scale: 1.04 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                        className="relative aspect-video bg-neutral-955 overflow-hidden shadow rounded-xl"
+                      >
                         <YoutubeThumbnailImg
                           videoId={vid.videoId}
                           alt={vid.title}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-102"
+                          className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-2 left-2 bg-white text-black text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded tracking-wider shadow">
+                        <div className="absolute top-2 left-2 bg-white text-black text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded tracking-wider shadow z-10">
                           NEW
                         </div>
-                        <div className="absolute right-2 bottom-2 px-1.5 py-0.5 bg-black/80 border border-neutral-800 text-[10px] font-mono font-bold text-zinc-350">
+                        <div className="absolute right-2 bottom-2 px-1.5 py-0.5 bg-black/80 border border-neutral-800 text-[10px] font-mono font-bold text-zinc-350 z-10">
                           {vid.duration || 'Class'}
                         </div>
-                      </div>
-                      <div className="p-3 flex-1 flex flex-col justify-between items-start space-y-3">
-                        <h4 className="text-xs font-extrabold text-white line-clamp-2 uppercase leading-tight font-sans group-hover:text-white transition-colors">{vid.title}</h4>
-                        <div className="flex justify-between items-center w-full text-[10px] text-zinc-500 font-mono pt-1 border-t border-neutral-900">
+                      </motion.div>
+                      <div className="pt-3 pb-1 flex flex-col justify-between items-start space-y-1.5">
+                        <h4 className="text-xs font-extrabold text-white line-clamp-2 uppercase leading-tight font-sans">{vid.title}</h4>
+                        <div className="flex justify-between items-center w-full text-[10px] text-zinc-500 font-mono pt-1">
                           <span className="truncate max-w-[130px]">{vid.channelName}</span>
                           <span className="text-[#A0A0A0] font-extrabold uppercase text-[9px]">{vid.subject}</span>
                         </div>
@@ -987,20 +1001,20 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display uppercase">Top Channels</h3>
               </div>
 
-              {channels.length === 0 ? (
+              {(channels || []).length === 0 ? (
                 <div className="text-center py-6 border border-neutral-910 rounded-xl bg-neutral-900/30">
                   <p className="text-xs text-zinc-550 font-mono">No channels registered yet. Call Admin setups.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {channels.map((chan) => (
+                <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x scroll-smooth">
+                  {(channels || []).map((chan) => (
                     <div
                       key={chan.channelId}
                       onClick={() => {
                         setSelectedChannel(chan);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className="bg-[#0E0E0F]/90 border border-zinc-850 p-4 rounded-xl text-center space-y-3 flex flex-col items-center hover:bg-[#121214] hover:border-zinc-700 transition-all duration-300 cursor-pointer shadow-md"
+                      className="w-[180px] shrink-0 snap-start bg-[#0E0E0F]/90 border border-zinc-855 p-4 rounded-xl text-center space-y-3 flex flex-col items-center hover:bg-[#121214] hover:border-zinc-700 transition-all duration-300 cursor-pointer shadow-md"
                     >
                       <div className="relative">
                         <SafeImage
@@ -1351,7 +1365,7 @@ export default function VideoLibrary({ onBackToHome }: VideoLibraryProps) {
                   {/* Hotkeys instruction alert banner */}
                   <div className="p-2.5 rounded-lg border border-neutral-910 bg-neutral-950/40 text-[10.5px] font-mono text-zinc-500 flex items-center gap-2 leading-none">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span><b>Verse keyboard triggers:</b> Space = play/pause, [<b>N</b>] = next video, [<b>P</b>] = previous video, [<b>F</b>] = fullscreen</span>
+                    <span><b>Playlist keyboard triggers:</b> Space = play/pause, [<b>N</b>] = next video, [<b>P</b>] = previous video, [<b>F</b>] = fullscreen</span>
                   </div>
                 </div>
 

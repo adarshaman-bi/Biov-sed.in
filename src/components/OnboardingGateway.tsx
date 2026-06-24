@@ -25,10 +25,9 @@ export default function OnboardingGateway({ onOpenAuth }: OnboardingGatewayProps
   const { user, enableGuestMode, updatePreferences, loading } = useAuth();
   
   // App-level flow step
-  // 0: Auth Selection (Login / Signup / Guest)
   // 1: Exam target
   // 2: Target year
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [step, setStep] = useState<1 | 2>(1);
   
   // Selections
   const [selectedExam, setSelectedExam] = useState<string>('');
@@ -40,9 +39,6 @@ export default function OnboardingGateway({ onOpenAuth }: OnboardingGatewayProps
       if (user.onboardingCompleted) {
         return;
       } else {
-        if (step === 0) {
-          setStep(1);
-        }
         if (user.examType && user.examType !== 'Both' && !selectedExam) {
           setSelectedExam(user.examType);
         }
@@ -50,10 +46,8 @@ export default function OnboardingGateway({ onOpenAuth }: OnboardingGatewayProps
           setSelectedYear(user.appearingYear);
         }
       }
-    } else {
-      setStep(0);
     }
-  }, [user, step]);
+  }, [user]);
 
   if (loading || user?.onboardingCompleted) {
     return null;
@@ -103,58 +97,6 @@ export default function OnboardingGateway({ onOpenAuth }: OnboardingGatewayProps
           </div>
 
           <AnimatePresence mode="wait">
-            {step === 0 && (
-              <motion.div
-                key="step0"
-                initial={{ opacity: 0, y: 3 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -3 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-4"
-              >
-                <div className="text-center mb-4">
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-400">
-                    SELECT AN OPTION TO PERSIST OR START YOUR SESSION:
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={() => onOpenAuth?.('signup')}
-                    type="button"
-                    className="p-5 border border-zinc-800 hover:border-white bg-black text-left transition-colors duration-150 cursor-pointer"
-                  >
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">CREATE ACCOUNT</h3>
-                    <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
-                      Saves study progress across devices.
-                    </p>
-                  </button>
-
-                  <button
-                    onClick={() => onOpenAuth?.('signin')}
-                    type="button"
-                    className="p-5 border border-zinc-800 hover:border-white bg-black text-left transition-colors duration-150 cursor-pointer"
-                  >
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">ACCESS SIGN IN</h3>
-                    <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
-                      Load and restore pre-existing learning logs.
-                    </p>
-                  </button>
-
-                  <button
-                    onClick={() => enableGuestMode()}
-                    type="button"
-                    className="p-5 border border-zinc-800 hover:border-white bg-black text-left transition-colors duration-150 cursor-pointer"
-                  >
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">CONTINUE AS GUEST</h3>
-                    <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
-                      Bypass account setup. Save locally inside this device.
-                    </p>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-
             {step === 1 && (
               <motion.div
                 key="step1"

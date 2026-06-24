@@ -1,5 +1,4 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage, auth } from '../firebase';
+import { storage, auth, ref, uploadBytes, getDownloadURL, deleteObject } from '../firebase';
 
 export type UserFolderType = 'profile' | 'notes' | 'documents' | 'uploads';
 

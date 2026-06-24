@@ -269,13 +269,13 @@ service cloud.firestore {
 
     // Playlists directory
     match /playlists/{playlistId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     // Specialized OneShot full-chapter items
     match /oneshots/{oneshotId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -358,13 +358,13 @@ service cloud.firestore {
 
     // Curated YouTube Channels (Public read, admin/moderator write)
     match /channels/{channelId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     // Curated YouTube Videos (Public read, admin/moderator write)
     match /videos/{videoId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

@@ -1,9 +1,17 @@
-import { doc, getDocs, collection, writeBatch, deleteDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth, doc, getDocs, collection, writeBatch, deleteDoc } from './firebase';
 import { TeacherProfile, InstituteProfile, Lecture, Playlist, Batch, EntityTrustScoreBreakdown as TrustScoreBreakdown } from './types';
 
 export async function seedInitialDatabase() {
   try {
+    // Only allow writes if we are an authenticated admin to prevent permissions denied errors for guest sessions
+    const currentUser = auth.currentUser;
+    const isAdmin = currentUser && currentUser.email === 'adarshaman898@gmail.com';
+    
+    if (!isAdmin) {
+      console.log('Database is unseeded or incomplete. Client-side seeding scheduled for authenticated administrators only. Defaulting to local indexing cache.');
+      return;
+    }
+
     // Check if we already have the rich database to avoid re-seeding endlessly in standard sessions
     const snapPlaylists = await getDocs(collection(db, 'playlists'));
     

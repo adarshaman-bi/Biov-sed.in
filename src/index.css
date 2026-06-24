@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Inter", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   --color-main-bg: #000000;
   --color-surface-card: #101010;
@@ -17,6 +17,13 @@
   --color-neutral-structure: #27262E;
   --color-secondary-accent: #EEEEEE;
   --color-ratings: #FFEFD5;
+
+  /* Brand color variables for modern minimal dark aesthetic */
+  --color-brand-dark: #000000;
+  --color-brand-black: #09090B;
+  --color-brand-border: #18181B; /* Subtle zinc-900 border */
+  --color-brand-gray: #A1A1AA;   /* Elegant zinc-400 gray text */
+  --color-brand-accent: #FFFFFF; /* High-contrast white accent */
 
   /* PURGE STANDARD PALETTES: Override Tailwind color families to Black, White, Grey, Ice White, Powder Blue, Charcoal Navy, Platinum, or Papaya Whip strictly */
   --color-indigo-50: #F4FEFF;

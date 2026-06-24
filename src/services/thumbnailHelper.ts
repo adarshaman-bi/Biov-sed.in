@@ -1,6 +1,5 @@
 import { Playlist, Lecture } from '../types';
-import { db } from '../firebase';
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { db, collection, query, where, getDocs, limit, orderBy } from '../firebase';
 
 const thumbnailCache: Record<string, string> = {};
 const pendingQueries = new Set<string>();

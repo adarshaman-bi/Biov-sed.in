@@ -1,0 +1,50 @@
+[
+  {
+    "id": "pw_physics_class12",
+    "title": "Class 12 Physics Complete Lectures",
+    "category": "Physics",
+    "thumbnail": "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=300&auto=format&fit=crop&q=60",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=300&auto=format&fit=crop&q=60",
+    "description": "Comprehensive covering of Electrostatics, Current Electricity and optics for board and JEE/NEET exams by Alakh Pandey.",
+    "teacher_id": "alakh_pandey",
+    "teacherId": "alakh_pandey",
+    "teacherName": "Alakh Pandey",
+    "subject": "Physics",
+    "lecturesCount": 15,
+    "examType": "JEE",
+    "examTags": ["JEE", "NEET"],
+    "createdAt": "2026-06-21T18:29:34-07:00"
+  },
+  {
+    "id": "mohit_calculus",
+    "title": "Calculus Masterclass for JEE Advanced",
+    "category": "Mathematics",
+    "thumbnail": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=60",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=60",
+    "description": "Premium rigorous sessions explaining limits, continuity, derivatives, and integral calculus by Mohit Tyagi.",
+    "teacher_id": "mohit_tyagi",
+    "teacherId": "mohit_tyagi",
+    "teacherName": "Mohit Tyagi",
+    "subject": "Mathematics",
+    "lecturesCount": 22,
+    "examType": "JEE",
+    "examTags": ["JEE"],
+    "createdAt": "2026-06-21T18:29:34-07:00"
+  },
+  {
+    "id": "nv_physics_mechanics",
+    "title": "Kinematics & Rotational Mechanics with Animations",
+    "category": "Physics",
+    "thumbnail": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=300&auto=format&fit=crop&q=60",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=300&auto=format&fit=crop&q=60",
+    "description": "Visualizing kinematics, center of mass and angular momentum with animated Kota lectures by NV Sir.",
+    "teacher_id": "nv_sir",
+    "teacherId": "nv_sir",
+    "teacherName": "Nitin Vijay (NV Sir)",
+    "subject": "Physics",
+    "lecturesCount": 18,
+    "examType": "JEE",
+    "examTags": ["JEE", "NEET"],
+    "createdAt": "2026-06-21T18:29:34-07:00"
+  }
+]

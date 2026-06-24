@@ -1,0 +1,72 @@
+{
+  "teachers": [
+    {
+      "id": "alakh_pandey",
+      "name": "Alakh Pandey",
+      "avatar": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=150&auto=format&fit=crop&q=60",
+      "subject": "Physics",
+      "rating": 4.9,
+      "accuracy": 98,
+      "videoCount": 240,
+      "followersCount": 65400,
+      "bio": "Legendary Physics expert and founder of PW. Acclaimed for classical mechanics explanations.",
+      "subjects": ["Physics"],
+      "exams": ["JEE", "NEET"],
+      "isVerified": true,
+      "createdAt": "2026-06-21T18:29:34-07:00"
+    },
+    {
+      "id": "mohit_tyagi",
+      "name": "Mohit Tyagi",
+      "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=60",
+      "subject": "Mathematics",
+      "rating": 4.9,
+      "accuracy": 99,
+      "videoCount": 180,
+      "followersCount": 41200,
+      "bio": "IIT Delhi Alumnus. Premier authority in Calculus and Algebra with exhaustive visual structures.",
+      "subjects": ["Mathematics"],
+      "exams": ["JEE"],
+      "isVerified": true,
+      "createdAt": "2026-06-21T18:29:34-07:00"
+    },
+    {
+      "id": "nv_sir",
+      "name": "Nitin Vijay (NV Sir)",
+      "avatar": "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=60",
+      "subject": "Physics",
+      "rating": 4.8,
+      "accuracy": 95,
+      "videoCount": 140,
+      "followersCount": 29800,
+      "bio": "Legendary senior Physics mentor in Kota. Famous for animated representations and visual slides.",
+      "subjects": ["Physics"],
+      "exams": ["JEE", "NEET"],
+      "isVerified": true,
+      "createdAt": "2026-06-21T18:29:34-07:00"
+    }
+  ],
+  "test_series": [
+    {
+      "id": "pw_online_test_series",
+      "title": "Physics Wallah PW Online AITS Test Series",
+      "totalTests": 25,
+      "category": "NEET",
+      "price": 1499
+    },
+    {
+      "id": "unacademy_online_test",
+      "title": "Unacademy All India Mock Test Series (AITS)",
+      "totalTests": 20,
+      "category": "JEE Main",
+      "price": 1999
+    },
+    {
+      "id": "vedantu_online_test",
+      "title": "Vedantu Eklavya Master Online Test Series",
+      "totalTests": 15,
+      "category": "JEE Advanced",
+      "price": 2499
+    }
+  ]
+}

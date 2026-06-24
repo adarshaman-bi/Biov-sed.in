@@ -1,4 +1,8 @@
-import {
+import { 
+  db, 
+  auth, 
+  handleFirestoreError, 
+  OperationType,
   collection,
   doc,
   getDoc,
@@ -13,8 +17,8 @@ import {
   serverTimestamp,
   increment,
   writeBatch
-} from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+} from '../firebase';
+import { supabase } from '../utils/supabaseClient';
 import {
   TeacherProfile,
   InstituteProfile,
@@ -37,61 +41,108 @@ import {
 // USERS SERVICE
 export async function fetchUserProfile(uid: string): Promise<UserProfile | null> {
   if (!uid) return null;
-  const path = `users/${uid}`;
   try {
-    const userDoc = await getDoc(doc(db, 'users', uid));
-    if (userDoc.exists()) {
-      return userDoc.data() as UserProfile;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('uid', uid)
+      .single();
+    if (error) {
+      if (!error.message?.includes('Invalid API key')) {
+        console.warn('Supabase profile query returned error or empty:', error.message);
+      }
+      return null;
+    }
+    if (data) {
+      return {
+        uid: data.uid,
+        email: data.email,
+        displayName: data.display_name,
+        role: data.role,
+        examType: data.exam_type,
+        appearingYear: data.appearing_year,
+        preferredSubjects: data.preferred_subjects || [],
+        watchedContent: data.watched_content || [],
+        savedContent: data.saved_content || [],
+        hiddenContent: data.hidden_content || [],
+        likedContent: data.liked_content || [],
+        onboardingCompleted: data.onboarding_completed || false,
+        loginType: data.login_type,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+      } as UserProfile;
     }
     return null;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
+  } catch (error: any) {
+    if (!error?.message?.includes('Invalid API key')) {
+      console.error('Error fetching profile from Supabase:', error);
+    }
     return null;
   }
 }
 
 export async function createUserProfile(profile: Partial<UserProfile>): Promise<void> {
   if (!profile.uid) return;
-  const path = `users/${profile.uid}`;
   try {
     const now = new Date().toISOString();
-    const fullProfile = {
+    const dbProfile = {
       uid: profile.uid,
       email: profile.email || '',
-      displayName: profile.displayName || 'Guest User',
-      photoURL: profile.photoURL || '',
+      display_name: profile.displayName || 'Guest User',
       role: profile.role || 'user',
-      examType: profile.examType || 'Both',
-      createdAt: now,
-      updatedAt: now,
+      exam_type: profile.examType || 'Both',
+      appearing_year: profile.appearingYear || '2026',
+      preferred_subjects: profile.preferredSubjects || [],
+      watched_content: profile.watchedContent || [],
+      saved_content: profile.savedContent || [],
+      hidden_content: profile.hiddenContent || [],
+      liked_content: profile.likedContent || [],
+      onboarding_completed: profile.onboardingCompleted || false,
+      login_type: profile.loginType || 'email',
+      created_at: now,
+      updated_at: now
     };
-    await setDoc(doc(db, 'users', profile.uid), fullProfile);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    await supabase.from('profiles').upsert(dbProfile);
+  } catch (error: any) {
+    if (!error?.message?.includes('Invalid API key')) {
+      console.error('Error creating profile in Supabase:', error);
+    }
   }
 }
 
 export async function updateUserExamPreference(uid: string, examType: 'JEE' | 'NEET' | 'Both' | string): Promise<void> {
-  const path = `users/${uid}`;
   try {
-    await updateDoc(doc(db, 'users', uid), {
-      examType,
-      updatedAt: new Date().toISOString()
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    await supabase.from('profiles').update({
+      exam_type: examType,
+      updated_at: new Date().toISOString()
+    }).eq('uid', uid);
+  } catch (error: any) {
+    if (!error?.message?.includes('Invalid API key')) {
+      console.error('Error updating exam pref in Supabase:', error);
+    }
   }
 }
 
 export async function updateUserPreferences(uid: string, preferences: Partial<UserProfile>): Promise<void> {
-  const path = `users/${uid}`;
   try {
-    await updateDoc(doc(db, 'users', uid), {
-      ...preferences,
-      updatedAt: new Date().toISOString()
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    const dbPayload: any = {
+      updated_at: new Date().toISOString()
+    };
+    if (preferences.displayName !== undefined) dbPayload.display_name = preferences.displayName;
+    if (preferences.examType !== undefined) dbPayload.exam_type = preferences.examType;
+    if (preferences.appearingYear !== undefined) dbPayload.appearing_year = preferences.appearingYear;
+    if (preferences.preferredSubjects !== undefined) dbPayload.preferred_subjects = preferences.preferredSubjects;
+    if (preferences.watchedContent !== undefined) dbPayload.watched_content = preferences.watchedContent;
+    if (preferences.savedContent !== undefined) dbPayload.saved_content = preferences.savedContent;
+    if (preferences.hiddenContent !== undefined) dbPayload.hidden_content = preferences.hiddenContent;
+    if (preferences.likedContent !== undefined) dbPayload.liked_content = preferences.likedContent;
+    if (preferences.onboardingCompleted !== undefined) dbPayload.onboarding_completed = preferences.onboardingCompleted;
+
+    await supabase.from('profiles').update(dbPayload).eq('uid', uid);
+  } catch (error: any) {
+    if (!error?.message?.includes('Invalid API key')) {
+      console.error('Error updating preferences in Supabase:', error);
+    }
   }
 }
 

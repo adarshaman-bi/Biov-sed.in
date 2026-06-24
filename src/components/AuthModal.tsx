@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, MouseEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, User, GraduationCap, X, RotateCcw, Check, AlertCircle } from 'lucide-react';
 import { UserRole } from '../types';
@@ -6,11 +6,14 @@ import { UserRole } from '../types';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isLandingPage?: boolean;
+  onGuestBypass?: () => void;
 }
 
-export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, isLandingPage = false, onGuestBypass }: AuthModalProps) {
   const { signInGoogle, signInEmail, signUpEmail, sendPasswordReset, enableGuestMode } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
+  const [showGoogleHelp, setShowGoogleHelp] = useState(false);
   
   // Prefill remembered email from localStorage
   const [email, setEmail] = useState('');
@@ -110,14 +113,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         setSuccess('Security recovery dispatch sent! Please confirm email mailbox.');
       }
     } catch (err: any) {
-      // Graceful degradation: catch and map network/credentials errors into beautifully labeled user tips
+      // Graceful mapping of Supabase and Firebase error states into beautifully written candidate tips
       let friendlyError = err?.message || 'Authentication operation failed.';
-      if (friendlyError.includes('auth/invalid-credential')) {
-        friendlyError = 'Incorrect authentication details. Please double-check your credentials or try Guest Mode.';
-      } else if (friendlyError.includes('auth/email-already-in-use')) {
-        friendlyError = 'This email domain is already registered. Try logging in or request a recovery code.';
-      } else if (friendlyError.includes('network-request-failed')) {
-        friendlyError = 'Network connection offline. Operating gracefully, please try Google Auth or Continue as Guest.';
+      const lowerError = friendlyError.toLowerCase();
+      
+      if (lowerError.includes('invalid-credential') || lowerError.includes('invalid login credentials') || lowerError.includes('invalid_grant')) {
+        friendlyError = 'Incorrect credentials. Please verify your email and passcodes, or continue to explore as a Guest.';
+      } else if (lowerError.includes('email-already-in-use') || lowerError.includes('user already registered') || lowerError.includes('already exists')) {
+        friendlyError = 'This email is already registered. Please sign in or use a different email address.';
+      } else if (lowerError.includes('network-request-failed') || lowerError.includes('failed to fetch') || lowerError.includes('network')) {
+        friendlyError = 'Network connection intermittent or offline. Please check your internet connection and retry.';
+      } else if (lowerError.includes('rate limit') || lowerError.includes('too many requests')) {
+        friendlyError = 'Request frequency rate limit reached. Please wait a minute and try again.';
+      } else if (lowerError.includes('signup requires a valid email') || lowerError.includes('invalid email')) {
+        friendlyError = 'Please provide a valid, properly formatted email address.';
       }
       setError(friendlyError);
     } finally {
@@ -125,29 +134,104 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError('');
-    try {
-      await signInGoogle();
+  const handleGoogleSignIn = () => {
+    setShowGoogleHelp(true);
+  };
+
+  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (isLandingPage) return;
+    if (e.target === e.currentTarget) {
       onClose();
-    } catch (err: any) {
-      setError('Google Sign-In failed: ' + (err?.message || 'Please check connection or operational states.'));
     }
   };
 
+  if (showGoogleHelp) {
+    return (
+      <div 
+        onClick={handleBackdropClick}
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 text-left ${
+          isLandingPage 
+            ? 'bg-[#020202]' 
+            : 'bg-black/85 backdrop-blur-md animate-fade-in'
+        }`}
+      >
+        <div className="w-full max-w-sm bg-[#09090A] rounded-2xl shadow-2xl p-6 relative overflow-hidden border border-zinc-900">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+
+          <h2 className="text-lg font-display font-medium text-amber-400 tracking-tight mb-2 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+            Google OAuth Check
+          </h2>
+          <p className="text-xs text-brand-gray mb-4 leading-relaxed">
+            Google Sign-In requires Client ID configuration in your active **Supabase Project Settings**.
+          </p>
+          
+          <div className="bg-[#121214] border border-amber-950/40 p-3.5 rounded-xl space-y-2.5 mb-5 text-[11px] text-zinc-300 leading-relaxed font-sans">
+            <p>
+              ❌ If Google Provider is **not enabled** on your active Supabase project, proceeding will crash with this exact error:  
+              <code className="text-red-400 bg-black/40 px-1 py-0.5 rounded font-mono text-[9.5px] block mt-1 break-all select-all">
+                "Unsupported provider: provider is not enabled"
+              </code>
+            </p>
+            <p className="text-zinc-400 pt-2 border-t border-zinc-800">
+              💡 **No configuration set up?**  
+              Create and log in easily with **any email & password** in the Signup tab, or choose **Continue as Guest / Preview Mode** below.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={async () => {
+                setShowGoogleHelp(false);
+                setError('');
+                try {
+                  await signInGoogle();
+                  onClose();
+                } catch (err: any) {
+                  setError('Google Sign-In failed: ' + (err?.message || 'Check connection or Supabase settings.'));
+                }
+              }}
+              className="w-full bg-brand-accent hover:bg-neutral-250 text-brand-black font-semibold py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-sans"
+            >
+              Attempt Google Sign-In Anyway
+            </button>
+            
+            <button
+              onClick={() => {
+                setShowGoogleHelp(false);
+              }}
+              className="w-full bg-transparent hover:bg-zinc-900 border border-zinc-800 text-zinc-300 font-medium py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-sans"
+            >
+              Cancel & Use Email / Guest
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in text-left">
-      <div className="w-full max-w-md bg-brand-dark border border-brand-border rounded-xl shadow-2xl p-6 relative overflow-hidden">
+    <div 
+      onClick={handleBackdropClick}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 text-left ${
+        isLandingPage 
+          ? 'bg-[#020202]' 
+          : 'bg-black/85 backdrop-blur-md animate-fade-in'
+      }`}
+    >
+      <div className="w-full max-w-md bg-[#09090A] rounded-2xl shadow-2xl p-6 relative overflow-hidden border border-zinc-900">
         {/* Emil Kowalski Detail: Subtle visual ambient orb */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />
 
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-brand-gray hover:text-brand-accent transition-colors"
-          aria-label="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        {!isLandingPage && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-brand-gray hover:text-brand-accent transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
 
         <h2 className="text-xl font-display font-medium text-brand-accent tracking-tight mb-2">
           {mode === 'signin' && 'Sign in to Biovised'}
@@ -193,13 +277,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     onBlur={() => setNameTouched(true)}
                     onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
                     placeholder="Enter Candidate Full Name"
-                    className={`w-full bg-brand-black border ${
+                    className={`w-full bg-[#121213] border-0 border-b-2 ${
                       nameTouched && !isNameValid 
-                        ? 'border-red-500/80 focus:border-red-500' 
+                        ? 'border-red-500/80' 
                         : nameTouched && isNameValid
-                        ? 'border-emerald-500/50 focus:border-emerald-500'
-                        : 'border-brand-border focus:border-brand-accent'
-                    } rounded-lg py-2.5 pl-10 pr-4 text-sm text-brand-accent outline-none font-sans transition-all`}
+                        ? 'border-emerald-500/50'
+                        : 'border-[#222224] focus:border-white'
+                    } rounded-t-lg rounded-b-none py-2.5 pl-10 pr-4 text-sm text-brand-accent outline-none font-sans transition-all`}
                   />
                 </div>
                 {nameTouched && !isNameValid && (
@@ -215,7 +299,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as UserRole)}
-                    className="w-full bg-brand-black border border-brand-border focus:border-brand-accent rounded-lg py-2.5 px-3 text-sm text-brand-accent outline-none"
+                    className="w-full bg-[#121213] border-0 border-b-2 border-[#222224] focus:border-white rounded-t-lg rounded-b-none py-2.5 px-3 text-sm text-brand-accent outline-none transition-all"
                   >
                     <option value="user">Student</option>
                     <option value="teacher">Teacher</option>
@@ -227,7 +311,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <select
                     value={examType}
                     onChange={(e) => setExamType(e.target.value)}
-                    className="w-full bg-brand-black border border-brand-border focus:border-brand-accent rounded-lg py-2.5 px-3 text-sm text-brand-accent outline-none"
+                    className="w-full bg-[#121213] border-0 border-b-2 border-[#222224] focus:border-white rounded-t-lg rounded-b-none py-2.5 px-3 text-sm text-brand-accent outline-none transition-all"
                   >
                     <option value="JEE">JEE</option>
                     <option value="NEET">NEET</option>
@@ -256,13 +340,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 onBlur={() => setEmailTouched(true)}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="candidate@domain.org"
-                className={`w-full bg-brand-black border ${
+                className={`w-full bg-[#121213] border-0 border-b-2 ${
                   emailTouched && !isEmailValid 
-                    ? 'border-red-500/80 focus:border-red-500' 
+                    ? 'border-red-500/80' 
                     : emailTouched && isEmailValid
-                    ? 'border-emerald-500/50 focus:border-emerald-500'
-                    : 'border-brand-border focus:border-brand-accent'
-                } rounded-lg py-2.5 pl-10 pr-4 text-sm text-brand-accent outline-none font-mono transition-all`}
+                    ? 'border-emerald-500/50'
+                    : 'border-[#222224] focus:border-white'
+                } rounded-t-lg rounded-b-none py-2.5 pl-10 pr-4 text-sm text-brand-accent outline-none font-mono transition-all`}
               />
             </div>
           </div>
@@ -288,13 +372,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   onBlur={() => setPasswordTouched(true)}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="******"
-                  className={`w-full bg-brand-black border ${
+                  className={`w-full bg-[#121213] border-0 border-b-2 ${
                     passwordTouched && mode === 'signup' && !isPasswordValid
-                      ? 'border-red-500/80 focus:border-red-500'
+                      ? 'border-red-500/80'
                       : passwordTouched && mode === 'signup' && isPasswordValid
-                      ? 'border-emerald-500/50 focus:border-emerald-500'
-                      : 'border-brand-border focus:border-brand-accent'
-                  } rounded-lg py-2.5 pl-10 pr-4 text-sm text-brand-accent outline-none font-mono transition-all`}
+                      ? 'border-emerald-500/50'
+                      : 'border-[#222224] focus:border-white'
+                  } rounded-t-lg rounded-b-none py-2.5 pl-10 pr-4 text-sm text-brand-accent outline-none font-mono transition-all`}
                 />
               </div>
 
@@ -354,7 +438,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             <button
               onClick={handleGoogleSignIn}
               type="button"
-              className="w-full bg-brand-black hover:bg-brand-border border border-brand-border text-brand-accent font-medium py-22.5 rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-sans"
+              className="w-full bg-brand-black hover:bg-brand-border border border-brand-border text-brand-accent font-medium py-2.5 rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-sans"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -384,7 +468,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             <button
               onClick={() => {
                 enableGuestMode();
-                onClose();
+                if (onGuestBypass) {
+                  onGuestBypass();
+                } else {
+                  onClose();
+                }
               }}
               type="button"
               className="w-full mt-2 bg-transparent hover:bg-neutral-900 border border-dashed border-zinc-700 text-zinc-450 font-medium py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-sans"
@@ -392,18 +480,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
               Continue as Guest / Preview Mode
             </button>
 
-            <button
-              onClick={() => {
-                setEmail('adarshaman898@gmail.com');
-                setPassword('Biovised#2106!');
-                setEmailTouched(true);
-                setPasswordTouched(true);
-              }}
-              type="button"
-              className="w-full mt-2 bg-indigo-950/30 hover:bg-indigo-900/30 border border-indigo-505/30 text-indigo-400 font-mono py-2 rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              ⚡ Prefill 'adarshaman898@gmail.com' Demo
-            </button>
+
           </>
         )}
 

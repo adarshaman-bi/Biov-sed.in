@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Image, User, Layers, GraduationCap } from 'lucide-react';
-import { ref, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase';
+import { storage, ref, getDownloadURL } from '../firebase';
+import { extractYoutubeVideoId } from './YoutubeThumbnailImg';
 
 interface SafeImageProps {
   src?: string | null;
@@ -63,6 +63,13 @@ export function SafeImage({
 
     if (!src) {
       setResolvedSrc(null);
+      setLoading(false);
+      return;
+    }
+
+    const ytVideoId = extractYoutubeVideoId(src);
+    if (ytVideoId) {
+      setResolvedSrc(`https://img.youtube.com/vi/${ytVideoId}/maxresdefault.jpg`);
       setLoading(false);
       return;
     }
@@ -186,8 +193,8 @@ export function SafeImage({
   return (
     <div className={`relative overflow-hidden ${layoutClass} ${className}`}>
       {loading && (
-        <div className="absolute inset-0 bg-zinc-900/90 flex items-center justify-center animate-pulse border border-zinc-900/50">
-          <div className="w-4 h-4 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 via-[#121215] to-[#0A0A0C] flex items-center justify-center animate-pulse">
+          <div className="w-4 h-4 border-2 border-zinc-800 border-t-zinc-500 rounded-full animate-spin" />
         </div>
       )}
       <img

@@ -1,5 +1,4 @@
-import { collection, doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, collection, doc, setDoc } from '../firebase';
 
 export interface SecurityAuditEntry {
   id: string;

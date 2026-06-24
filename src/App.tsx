@@ -13,7 +13,7 @@ import { DynamicRating } from './components/DynamicRating';
 import ProfileDashboard from './components/ProfileDashboard';
 import ModeratorDashboard from './components/ModeratorDashboard';
 import AuthModal from './components/AuthModal';
-import OnboardingGateway from './components/OnboardingGateway';
+// OnboardingGateway removed to allow direct guest access on launch
 import NotificationsDashboard from './components/NotificationsDashboard';
 import SearchSpecsModal from './components/SearchSpecsModal';
 import {
@@ -21,8 +21,10 @@ import {
   personalizePlaylists,
   personalizeTeachers
 } from './services/recommendationEngine';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { supabase } from './utils/supabaseClient';
+import localMasterImport from './data/biovised_master_firestore_import.json';
+import localPlaylistsJson from './data/playlists.json';
+import localVideosJson from './data/videos.json';
 import {
   fetchTeachers,
   fetchInstitutes,
@@ -155,7 +157,15 @@ function InstituteCardSkeleton() {
 }
 
 function AppContent() {
-  const { user, isGuest, enableGuestMode, loading, setExamPreference, updatePreferences } = useAuth();
+  const { user, firebaseUser, isGuest, enableGuestMode, loading, setExamPreference, updatePreferences } = useAuth();
+
+  const [guestBypassed, setGuestBypassed] = useState(() => {
+    try {
+      return sessionStorage.getItem('biovised_guest_bypassed') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Control splash screen layers (shows on initial session load)
   const [showSplash, setShowSplash] = useState(() => {
@@ -173,6 +183,7 @@ function AppContent() {
   const [currentView, setCurrentView] = useState<'explore' | 'profile' | 'moderator' | 'notifications' | 'search'>('explore');
   const [activeLecture, setActiveLecture] = useState<Lecture | null>(null);
   const [activeExploreTab, setActiveExploreTab] = useState<'home' | 'teachers' | 'playlists' | 'tests' | 'batches' | 'lecture' | 'institutes'>('home');
+  const [searchSubTab, setSearchSubTab] = useState<'all' | 'lecture' | 'teacher' | 'playlist' | 'batch' | 'test' | 'institute'>('all');
   
   // Search history state for previous 15 days
   const [searchHistory, setSearchHistory] = useState<Array<{ query: string; ts: number }>>([]);
@@ -227,37 +238,53 @@ function AppContent() {
       setNotifications([]);
       return;
     }
-    const q = query(
-      collection(db, 'users', user.uid, 'notifications'),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => doc.data() as AppNotification);
-      setNotifications(data);
-    }, (error) => {
-      console.warn('Real-time notifications exception bypassed:', error);
-      try {
-        handleFirestoreError(error, OperationType.GET, `users/${user.uid}/notifications`);
-      } catch (err) {
-        // log silent
+    try {
+      const stored = localStorage.getItem(`biovised_notifications_${user.uid}`);
+      if (stored) {
+        setNotifications(JSON.parse(stored));
+      } else {
+        const welcomeNotifs: AppNotification[] = [
+          {
+            id: 'welcome_notif',
+            userId: user.uid,
+            title: 'Welcome to Biovised!',
+            message: 'You have entered our premium visual stream environment. Explore verified, high-yield JEE & NEET ecosystem materials.',
+            read: false,
+            createdAt: new Date().toISOString(),
+            type: 'system'
+          }
+        ];
+        setNotifications(welcomeNotifs);
+        localStorage.setItem(`biovised_notifications_${user.uid}`, JSON.stringify(welcomeNotifs));
       }
-    });
-    return () => unsubscribe();
+    } catch {
+      setNotifications([]);
+    }
   }, [user]);
 
   // Handle slide-off gesture dismiss
   const handleNotificationDismiss = async (notificationId: string) => {
-    // Dynamic local state filter updates the UI instantly as the item exits the screen
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    await deleteNotification(notificationId);
+    setNotifications(prev => {
+      const updated = prev.filter(n => n.id !== notificationId);
+      if (user) {
+        try { localStorage.setItem(`biovised_notifications_${user.uid}`, JSON.stringify(updated)); } catch {}
+      }
+      return updated;
+    });
+    try { await deleteNotification(notificationId); } catch {}
   };
 
   // Mark all notifications as read inside the dashboard
   const handleMarkAllNotificationsAsRead = async () => {
     const unread = notifications.filter(n => !n.read);
-    // Optimistic UI update
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    await Promise.all(unread.map(n => markNotificationAsRead(n.id)));
+    setNotifications(prev => {
+      const updated = prev.map(n => ({ ...n, read: true }));
+      if (user) {
+        try { localStorage.setItem(`biovised_notifications_${user.uid}`, JSON.stringify(updated)); } catch {}
+      }
+      return updated;
+    });
+    try { await Promise.all(unread.map(n => markNotificationAsRead(n.id))); } catch {}
   };
 
   const isHandlingPopState = useRef(false);
@@ -559,27 +586,37 @@ function AppContent() {
   const [firestoreVideos, setFirestoreVideos] = useState<YouTubeVideo[]>([]);
   const [isSyncingVideos, setIsSyncingVideos] = useState<boolean>(false);
 
-  // Real-time synchronization with the Firestore /videos collection
-  useEffect(() => {
-    setIsSyncingVideos(true);
-    const q = query(collection(db, 'videos'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(doc => doc.data() as YouTubeVideo);
-      setFirestoreVideos(list);
-      setIsSyncingVideos(false);
-    }, (error) => {
-      console.error("Failed to sync videos collection:", error);
-      setIsSyncingVideos(false);
-      handleFirestoreError(error, OperationType.GET, 'videos');
-    });
-    return () => unsubscribe();
-  }, []);
+  // STRICT VARIABLE NAME PRESERVATION
+  const [testSeries, setTestSeries] = useState<any[]>([]);
+  const [oneShotVideos, setOneShotVideos] = useState<Lecture[]>([]);
+  const [videos, setVideos] = useState<Lecture[]>([]);
 
   const [subjectFilter, setSubjectFilter] = useState<string>('All');
   const [examFilter, setExamFilter] = useState<string>('NEET');
   const [contentTypeFilter, setContentTypeFilter] = useState<'All' | 'lecture' | 'oneshot'>('All');
   const [sortBy, setSortBy] = useState<'rating' | 'trustScore' | 'popularity'>('trustScore');
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
+
+  const getCuratedFallback = () => {
+    const exam = examFilter || 'NEET';
+    if (exam === 'JEE') {
+      return [
+        'JEE mains physics full one shot',
+        'jee coordinate geometry lectures',
+        'maths mock test mathongo',
+        'jee advanced calculus pyqs',
+        'physics hc verma solution review'
+      ];
+    } else {
+      return [
+        'NEET inorganic chemistry one shot',
+        'biology complete mock test series',
+        'neet organic chemistry revision',
+        'physics mechanics questions',
+        'aakash minor cheat sheets biology'
+      ];
+    }
+  };
 
   // PHASE 5: Server-side search API integration
   useEffect(() => {
@@ -750,39 +787,162 @@ function AppContent() {
 
   // Initial load of directories (once on mount) with automatic background persistence synchronization
   useEffect(() => {
-    Promise.all([
-      fetchTeachers().then(data => {
-        setTeachers(data);
-        try { localStorage.setItem('biovised_cached_teachers', JSON.stringify(data)); } catch (e) { console.warn(e); }
-        return data;
-      }),
-      fetchInstitutes().then(data => {
-        setInstitutes(data);
-        try { localStorage.setItem('biovised_cached_institutes', JSON.stringify(data)); } catch (e) { console.warn(e); }
-        return data;
-      }),
-      fetchLectures().then(data => {
-        setLectures(data);
-        try { localStorage.setItem('biovised_cached_lectures', JSON.stringify(data)); } catch (e) { console.warn(e); }
-        return data;
-      }),
-      fetchPlaylists().then(data => {
-        setPlaylists(data);
-        try { localStorage.setItem('biovised_cached_playlists', JSON.stringify(data)); } catch (e) { console.warn(e); }
-        return data;
-      }),
-      fetchBatches().then(data => {
-        setBatches(data);
-        try { localStorage.setItem('biovised_cached_batches', JSON.stringify(data)); } catch (e) { console.warn(e); }
-        return data;
-      })
-    ]).then(() => {
-      setIsInitialLoading(false);
-    }).catch(err => {
-      console.warn("Error resolving base datasets:", err);
-      setIsInitialLoading(false);
-    });
-  }, []);
+    const loadPlatformData = async () => {
+      try {
+        setIsInitialLoading(true);
+
+        // Fetch parallel resources from Supabase with native catch/handlers
+        const [
+          { data: dbTeachers, error: errTeachers },
+          { data: dbPlaylists, error: errPlaylists },
+          { data: dbVideos, error: errVideos },
+          { data: dbTestSeries, error: errTestSeries }
+        ] = await Promise.all([
+          supabase.from('teachers').select('*'),
+          supabase.from('playlists').select('*'),
+          supabase.from('videos').select('*'),
+          supabase.from('test_series').select('*')
+        ]);
+
+        const isApiKeyError = 
+          (errTeachers && errTeachers.message?.includes('Invalid API key')) ||
+          (errPlaylists && errPlaylists.message?.includes('Invalid API key')) ||
+          (errVideos && errVideos.message?.includes('Invalid API key')) ||
+          (errTestSeries && errTestSeries.message?.includes('Invalid API key'));
+
+        if (!isApiKeyError) {
+          if (errTeachers) console.warn('[Supabase Teachers Fetch Error]:', errTeachers);
+          if (errPlaylists) console.warn('[Supabase Playlists Fetch Error]:', errPlaylists);
+          if (errVideos) console.warn('[Supabase Videos Fetch Error]:', errVideos);
+          if (errTestSeries) console.warn('[Supabase TestSeries Fetch Error]:', errTestSeries);
+        }
+
+        // Fetch auxiliary legacy models (institutes, batches) from existing service helpers
+        let auxiliaryInstitutes: InstituteProfile[] = [];
+        let auxiliaryBatches: Batch[] = [];
+        try {
+          auxiliaryInstitutes = await fetchInstitutes().catch(() => []);
+          auxiliaryBatches = await fetchBatches().catch(() => []);
+        } catch (auxErr) {
+          console.warn('[Auxiliary Services Resolution Error]:', auxErr);
+        }
+
+        // 1. Process & Map Teachers (Applying camelCase maps & optional chaining audit)
+        const rawTeachers = dbTeachers && dbTeachers.length > 0 ? dbTeachers : (localMasterImport?.teachers || []);
+        const sanitizedTeachers = rawTeachers.map((t: any) => ({
+          id: t?.id,
+          name: t?.name || '',
+          avatar: t?.avatar || '',
+          subject: t?.subject || '',
+          subjects: t?.subjects || [t?.subject].filter(Boolean) || [],
+          rating: t?.rating || 4.5,
+          accuracy: t?.accuracy || 90,
+          videoCount: t?.videoCount || t?.video_count || 0,
+          followersCount: t?.followersCount || t?.followers_count || 0,
+          bio: t?.bio || '',
+          exams: t?.exams || ['JEE', 'NEET'],
+          isVerified: t?.isVerified ?? t?.is_verified ?? true,
+          createdAt: t?.createdAt || t?.created_at || new Date().toISOString()
+        }));
+        setTeachers(sanitizedTeachers);
+
+        // 2. Process & Map Playlists
+        const rawPlaylists = dbPlaylists && dbPlaylists.length > 0 ? dbPlaylists : (localPlaylistsJson || []);
+        const sanitizedPlaylists = rawPlaylists.map((p: any) => {
+          const matchedTeacher = sanitizedTeachers.find((t: any) => t.id === p.teacher_id || t.id === p.teacherId);
+          return {
+            id: p?.id,
+            title: p?.title || '',
+            category: p?.category || p?.subject || '',
+            thumbnail: p?.thumbnail || p?.thumbnail_url || '',
+            thumbnailUrl: p?.thumbnailUrl || p?.thumbnail || p?.thumbnail_url || '',
+            description: p?.description || '',
+            teacherId: p?.teacher_id || p?.teacherId || '',
+            teacherName: p?.teacherName || matchedTeacher?.name || '',
+            subject: p?.subject || p?.category || '',
+            lecturesCount: p?.lecturesCount || p?.lectures_count || p?.videoCount || p?.video_count || p?.video_count || 0,
+            examType: p?.examType || 'Both',
+            examTags: p?.examTags || p?.exam_tags || ['JEE', 'NEET'],
+            createdAt: p?.createdAt || p?.created_at || new Date().toISOString()
+          };
+        });
+        setPlaylists(sanitizedPlaylists);
+
+        // 3. Process & Map Videos
+        const rawVideos = dbVideos && dbVideos.length > 0 ? dbVideos : (localVideosJson || []);
+        const sanitizedVideos = rawVideos.map((v: any) => {
+          const matchedPlaylist = sanitizedPlaylists.find((p: any) => p.id === v.playlist_id || p.id === v.playlistId);
+          const matchedTeacher = sanitizedTeachers.find((t: any) => t.id === (v.teacher_id || v.teacherId || matchedPlaylist?.teacherId));
+          return {
+            id: v?.id,
+            title: v?.title || '',
+            videoUrl: v?.videoUrl || v?.video_url || '',
+            duration: v?.duration || '',
+            category: v?.category || 'lecture',
+            playlistId: v?.playlist_id || v?.playlistId || '',
+            playlist_id: v?.playlist_id || v?.playlistId || '',
+            viewsCount: v?.views || v?.viewsCount || v?.views_count || 0,
+            likesCount: v?.likesCount || v?.likes_count || 0,
+            thumbnailUrl: v?.thumbnailUrl || matchedPlaylist?.thumbnailUrl || '',
+            subject: v?.subject || matchedPlaylist?.subject || '',
+            examType: v?.examType || matchedPlaylist?.examType || 'Both',
+            contentType: v?.contentType || v?.category || 'lecture',
+            teacherId: v?.teacherId || v?.teacherId || matchedPlaylist?.teacherId || '',
+            teacherName: v?.teacherName || matchedTeacher?.name || '',
+            createdAt: v?.createdAt || v?.created_at || new Date().toISOString()
+          };
+        });
+        setVideos(sanitizedVideos);
+        setLectures(sanitizedVideos);
+        setFirestoreVideos(sanitizedVideos);
+
+        // 4. Process & Map Test Series
+        const rawTestSeries = dbTestSeries && dbTestSeries.length > 0 ? dbTestSeries : (localMasterImport?.test_series || []);
+        const sanitizedTestSeries = rawTestSeries.map((ts: any) => ({
+          id: ts?.id,
+          title: ts?.title || ts?.name || '',
+          totalTests: ts?.totalTests || ts?.total_tests || 20,
+          category: ts?.category || 'NEET',
+          price: ts?.price || 1499
+        }));
+        setTestSeries(sanitizedTestSeries);
+
+        // 5. Build and set OneShotVideos filter array
+        const oneshots = sanitizedVideos.filter((v: any) => v.contentType === 'oneshot' || v.category === 'oneshot');
+        setOneShotVideos(oneshots);
+
+        // 6. Set auxiliary structures
+        if (auxiliaryInstitutes && auxiliaryInstitutes.length > 0) {
+          setInstitutes(auxiliaryInstitutes);
+        }
+        if (auxiliaryBatches && auxiliaryBatches.length > 0) {
+          setBatches(auxiliaryBatches);
+        }
+
+        // 7. Save mapped state profiles to client local fallback cache
+        try {
+          localStorage.setItem('biovised_cached_teachers', JSON.stringify(sanitizedTeachers));
+          localStorage.setItem('biovised_cached_playlists', JSON.stringify(sanitizedPlaylists));
+          localStorage.setItem('biovised_cached_lectures', JSON.stringify(sanitizedVideos));
+          if (auxiliaryInstitutes && auxiliaryInstitutes.length > 0) {
+            localStorage.setItem('biovised_cached_institutes', JSON.stringify(auxiliaryInstitutes));
+          }
+          if (auxiliaryBatches && auxiliaryBatches.length > 0) {
+            localStorage.setItem('biovised_cached_batches', JSON.stringify(auxiliaryBatches));
+          }
+        } catch (e) {
+          console.warn('[Storage Cache Sync Error]:', e);
+        }
+
+      } catch (err) {
+        console.warn('Error resolving base datasets from Supabase/Firestore:', err);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    loadPlatformData();
+  }, [localMasterImport, localPlaylistsJson, localVideosJson]);
 
   // Sync user following list and handle view reset on sign out
   useEffect(() => {
@@ -821,11 +981,31 @@ function AppContent() {
     } else {
       setFollowedIds(prev => [...prev, t.id]);
       await toggleFollow(t.id, t.name, t.avatar, isFollowing);
-      await addRealNotification(
-        "New Educator Followed",
-        `You have successfully subscribed to ${t.name}. Direct stream-alert triggers are active!`,
-        'follow'
-      );
+      
+      const newNotif: AppNotification = {
+        id: `follow_${t.id}_${Date.now()}`,
+        userId: user.uid,
+        title: "New Educator Followed",
+        message: `You have successfully subscribed to ${t.name}. Direct stream-alert triggers are active!`,
+        read: false,
+        createdAt: new Date().toISOString(),
+        type: 'follow'
+      };
+      setNotifications(prev => {
+        const updated = [newNotif, ...prev];
+        try { localStorage.setItem(`biovised_notifications_${user.uid}`, JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+
+      try {
+        await addRealNotification(
+          "New Educator Followed",
+          `You have successfully subscribed to ${t.name}. Direct stream-alert triggers are active!`,
+          'follow'
+        );
+      } catch (err) {
+        console.warn("Could not save cloud notification:", err);
+      }
     }
   };
 
@@ -1021,40 +1201,42 @@ function AppContent() {
 
   if (showSplash) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center font-sans selection:bg-white selection:text-black">
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center font-sans selection:bg-white selection:text-black animate-fade-in">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.98 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="flex items-center gap-5 sm:gap-6 animate-fade-in"
+          className="flex flex-col items-center justify-center text-center px-4"
         >
-          {/* Dynamic and authentic SVG representation of the BioVised squircle logo */}
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-[20px] sm:rounded-[24px] flex items-center justify-center shadow-[0_0_50px_rgba(255,255,255,0.15)] shrink-0">
-            <span className="text-black font-sans font-black text-3xl sm:text-4xl select-none tracking-tight">B</span>
-            {/* The white logo contains a small black dot next to the B */}
-            <span className="absolute top-3.5 right-3.5 w-2.5 h-2.5 bg-black rounded-full" />
-          </div>
-
-          <div className="flex flex-col text-left pl-1">
-            <h1 className="text-white text-3xl sm:text-5xl font-bold tracking-tight font-sans leading-none flex flex-col justify-start select-none">
-              BioVised
-            </h1>
-            {/* White dot at the bottom left under B */}
-            <span className="w-1.5 h-1.5 bg-white rounded-full mt-2 ml-0.5 animate-pulse" />
+          <h1 className="text-white text-4xl sm:text-6xl font-bold tracking-tight font-sans select-none">
+            BioVised
+          </h1>
+          <p className="text-zinc-500 text-[10px] sm:text-xs tracking-widest uppercase mt-4 font-mono">
+            JEE & NEET Discovery Platform
+          </p>
+          <div className="w-48 h-0.5 bg-zinc-900 rounded-full overflow-hidden mt-6 relative">
+            <div className="absolute top-0 bottom-0 left-0 w-2/5 bg-white rounded-full animate-progress-slide" />
           </div>
         </motion.div>
-        
-        {/* Progress bar loop */}
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-40 h-[2px] bg-zinc-900 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ x: "-100%" }}
-            animate={{ x: "250%" }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-0 bottom-0 left-0 w-20 bg-white/95 rounded-full"
-          />
-        </div>
       </div>
+    );
+  }
+
+  // Gate check: If user is not authenticated and has not chosen guest mode yet, force them to land on the login page
+  if (!loading && !firebaseUser && !guestBypassed) {
+    return (
+      <AuthModal
+        isOpen={true}
+        onClose={() => {}}
+        isLandingPage={true}
+        onGuestBypass={() => {
+          try {
+            sessionStorage.setItem('biovised_guest_bypassed', 'true');
+          } catch {}
+          setGuestBypassed(true);
+        }}
+      />
     );
   }
 
@@ -1123,34 +1305,41 @@ function AppContent() {
       )}
 
       {/* Fixed top Header segment */}
-      <Header
-        onSearchChange={(q) => {
-          setSearchQuery(q);
-        }}
-        onSearchSubmit={() => {}}
-        onViewDashboard={(view) => {
-          setCurrentView(view);
-          if (view === 'explore') {
-            setIsSearchFocused(false);
-          }
-        }}
-        currentView={currentView}
-        searchVal={searchQuery}
-        activeExploreTab={activeExploreTab}
-        onOpenAuth={() => setAuthModalOpen(true)}
-        notifications={notifications}
-        showFilters={showFilters}
-        onToggleFilters={() => setSpecsModalOpen(true)}
-        isFilterSupported={currentView === 'explore' || currentView === 'search'}
-        onFocus={() => {
-          if (currentView === 'explore') {
-            setIsSearchFocused(true);
-          }
-        }}
-        searchSuggestions={searchSuggestions}
-        currentExamType={examFilter}
-        onVoiceSearchClick={startSpeechRecognition}
-      />
+      {currentView !== 'search' && (
+        <Header
+          onSearchChange={(q) => {
+            setSearchQuery(q);
+          }}
+          onSearchSubmit={() => {}}
+          onViewDashboard={(view) => {
+            setCurrentView(view);
+            if (view === 'explore') {
+              setIsSearchFocused(false);
+            }
+          }}
+          onLogoClick={() => {
+            setSearchQuery('');
+            setCurrentView('explore');
+            setActiveExploreTab('home');
+          }}
+          currentView={currentView}
+          searchVal={searchQuery}
+          activeExploreTab={activeExploreTab}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          notifications={notifications}
+          showFilters={showFilters}
+          onToggleFilters={() => setSpecsModalOpen(true)}
+          isFilterSupported={currentView === 'explore' || currentView === 'search'}
+          onFocus={() => {
+            if (currentView === 'explore') {
+              setIsSearchFocused(true);
+            }
+          }}
+          searchSuggestions={searchSuggestions}
+          currentExamType={examFilter}
+          onVoiceSearchClick={startSpeechRecognition}
+        />
+      )}
 
       {/* Modern Slide-Down Unified Multi-Filter Panel like YouTube but tailored to tabs */}
       <AnimatePresence>
@@ -1333,77 +1522,109 @@ function AppContent() {
           
           {/* Main conditional views manager */}
           {currentView === 'search' ? (
-            <div className="max-w-4xl mx-auto px-4 py-4 space-y-6 text-left pb-24 min-h-[80vh]">
-              {/* Voice Listening Portal / Back Controls Header */}
-              <div className="flex justify-between items-center pb-3 border-b border-[#1A1A1A]">
-                <h3 className="text-sm font-sans font-bold text-white tracking-tight flex items-center gap-2">
-                  Search Results
-                </h3>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setCurrentView('explore');
-                  }}
-                  className="text-xs font-mono font-bold text-zinc-500 hover:text-white uppercase tracking-wider px-3.5 py-1.5 rounded-full border border-zinc-900 bg-[#0A0A0B] hover:bg-zinc-900 transition-all cursor-pointer"
-                >
-                  ← Close Search
-                </button>
+            <div className="w-full min-h-screen bg-black text-white flex flex-col font-sans -mt-4">
+              {/* Premium Minimal Centered Search Header */}
+              <div className="sticky top-0 z-50 w-full bg-[#070708]/98 backdrop-blur-md border-b border-[#161619] py-4 px-4 flex items-center justify-center shrink-0 animate-in fade-in duration-200">
+                {/* Fixed Clean, Premium Sized Searchbar */}
+                <div className="w-full max-w-lg relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search lessons, chapters & educators..."
+                    className="w-full h-11 bg-[#121214] hover:bg-[#151518] border border-[#212124] focus:border-zinc-600 rounded-full pl-11 pr-24 text-xs font-sans text-white placeholder-zinc-550 outline-none transition-all shadow-inner"
+                    autoFocus
+                  />
+                  
+                  {/* Integrated inside-searchbar controls */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                    {/* Voice search button */}
+                    <button
+                      type="button"
+                      onClick={startSpeechRecognition}
+                      className="p-1.5 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      title="Search with Voice"
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                    </button>
+                    {/* Clean close/exit search button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setCurrentView('explore');
+                        setActiveExploreTab('home');
+                      }}
+                      className="p-1.5 bg-zinc-800/60 hover:bg-zinc-700 hover:text-white text-zinc-300 rounded-full transition-colors cursor-pointer"
+                      title="Exit Search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Speech Error Banner - Handling not-allowed blocked permission states gracefully */}
-              {speechError && (
-                <div className="bg-red-950/45 border border-red-900/60 text-red-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono animate-in slide-in-from-top-2 duration-300">
-                  <div className="space-y-1">
-                    <p className="font-bold uppercase tracking-wider text-red-400">Microphone Access Restricted</p>
-                    <p className="text-zinc-350 leading-relaxed max-w-2xl">
-                      {speechError === 'not-allowed' 
-                        ? 'Microphone permission was blocked or denied. Since this app is running in an iframe preview, please click the site settings, or allow microphone access in your browser.' 
-                        : `Speech recognition encountered an issue: "${speechError}".`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSpeechError(null)}
-                    className="self-start sm:self-center bg-red-900/40 hover:bg-red-900/60 hover:text-white text-zinc-200 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
-
-              {/* Listening Overlay Portal */}
-              {isListening && (
-                <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center gap-6 select-none animate-in fade-in duration-200">
-                  <div className="relative flex items-center justify-center">
-                    <div className="absolute w-24 h-24 bg-red-500/20 rounded-full animate-ping" />
-                    <div className="absolute w-20 h-20 bg-red-500/10 rounded-full animate-pulse" />
-                    <div className="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl relative z-10 transition-transform active:scale-95">
-                      <Mic className="w-7 h-7 animate-pulse" />
+              {/* Suggestions / Results Scroll Area */}
+              <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 py-6 space-y-6 text-left pb-32 flex-1">
+                {/* Speech Error Banner - Handling not-allowed blocked permission states gracefully */}
+                {speechError && (
+                  <div className="bg-red-950/45 border border-red-900/60 text-red-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono animate-in slide-in-from-top-2 duration-300">
+                    <div className="space-y-1">
+                      <p className="font-bold uppercase tracking-wider text-red-400">Microphone Access Restricted</p>
+                      <p className="text-zinc-350 leading-relaxed max-w-2xl">
+                        {speechError === 'not-allowed' 
+                          ? 'Microphone permission was blocked or denied. Since this app is running in an iframe preview, please click the site settings, or allow microphone access in your browser.' 
+                          : `Speech recognition encountered an issue: "${speechError}".`}
+                      </p>
                     </div>
+                    <button
+                      onClick={() => setSpeechError(null)}
+                      className="self-start sm:self-center bg-red-900/40 hover:bg-red-900/60 hover:text-white text-zinc-200 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
                   </div>
-                  
-                  <div className="flex flex-col items-center gap-2">
-                    <h3 className="text-lg font-bold tracking-wider uppercase text-white font-sans animate-pulse">
-                      Listening...
-                    </h3>
-                    <p className="text-xs text-zinc-450 font-mono">
-                      Say what you want to seek on Biovised
+                )}
+
+                {/* Listening Overlay Portal */}
+                {isListening && (
+                  <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center gap-6 select-none animate-in fade-in duration-200">
+                    <div className="relative flex items-center justify-center">
+                      <div className="absolute w-24 h-24 bg-red-500/20 rounded-full animate-ping" />
+                      <div className="absolute w-20 h-20 bg-red-500/10 rounded-full animate-pulse" />
+                      <div className="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl relative z-10 transition-transform active:scale-95">
+                        <Mic className="w-7 h-7 animate-pulse" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col items-center gap-2">
+                      <h3 className="text-lg font-bold tracking-wider uppercase text-white font-sans animate-pulse">
+                        Listening...
+                      </h3>
+                      <p className="text-xs text-zinc-450 font-mono">
+                        Say what you want to seek on Biovised
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setIsListening(false)}
+                      className="mt-8 px-6 py-2 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-400 hover:text-white transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {searchQuery.trim() === '' ? (
+                  <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in duration-300">
+                    <div className="w-12 h-12 bg-zinc-900/40 rounded-full flex items-center justify-center mb-4 border border-zinc-900/60">
+                      <Search className="w-4.5 h-4.5 text-zinc-500" />
+                    </div>
+                    <p className="text-xs text-zinc-500 font-sans tracking-wide">
+                      Search lessons, chapters & educators...
                     </p>
                   </div>
-
-                  <button
-                    onClick={() => setIsListening(false)}
-                    className="mt-8 px-6 py-2 rounded-full border border-zinc-800 hover:border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-400 hover:text-white transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {/* Main view routing logic: if searchQuery is empty feel, show absolutely nothing as in Pic 2 */}
-              {searchQuery.trim() === '' ? (
-                <div className="flex flex-col items-center justify-center py-20 text-zinc-700 font-mono text-center select-none">
-                  {/* Absolute clean void - zero logs, history or clutter as requested */}
-                </div>
               ) : isLabourIllusionActive ? (
                 /* High-fidelity Emil Kowalski Style Search Labour Illusion Component */
                 <div className="py-12 px-6 bg-brand-dark/40 border border-brand-border/40 rounded-2xl flex flex-col items-center justify-center gap-6 text-center shadow-xl backdrop-blur-md max-w-2xl mx-auto my-8 relative overflow-hidden animate-in fade-in zoom-in duration-300">
@@ -1463,230 +1684,283 @@ function AppContent() {
                   </div>
                 </div>
               ) : (() => {
-                const showLectures = activeExploreTab === 'home' || activeExploreTab === 'lecture';
-                const showTeachers = activeExploreTab === 'home' || activeExploreTab === 'teachers';
-                const showPlaylists = activeExploreTab === 'home' || activeExploreTab === 'playlists';
-                const showBatches = activeExploreTab === 'home' || activeExploreTab === 'batches';
-                const showTests = activeExploreTab === 'home' || activeExploreTab === 'tests';
-                const showInstitutes = activeExploreTab === 'home' || activeExploreTab === 'institutes';
+                // Determine layout lists based on sub-tab
+                const showLectures = searchSubTab === 'all' || searchSubTab === 'lecture';
+                const showTeachers = searchSubTab === 'all' || searchSubTab === 'teacher';
+                const showPlaylists = searchSubTab === 'all' || searchSubTab === 'playlist';
+                const showBatches = searchSubTab === 'all' || searchSubTab === 'batch';
+                const showTests = searchSubTab === 'all' || searchSubTab === 'test';
+                const showInstitutes = searchSubTab === 'all' || searchSubTab === 'institute';
+
+                // Count total visible categories in "All" view with > 0 results
+                const countActive = 
+                  (filteredLectures.length > 0 ? 1 : 0) +
+                  (filteredTeachers.length > 0 ? 1 : 0) +
+                  (filteredPlaylists.length > 0 ? 1 : 0) +
+                  (filteredBatches.length > 0 ? 1 : 0) +
+                  (filteredTestSeries.length > 0 ? 1 : 0) +
+                  (filteredInstitutes.length > 0 ? 1 : 0);
+
+                if (countActive === 0) {
+                  return (
+                    <div className="text-center py-20 bg-[#070708] border border-zinc-900 rounded-3xl p-8 max-w-md mx-auto my-8 shadow-2xl animate-in fade-in duration-300">
+                      <div className="w-16 h-16 bg-zinc-900/50 rounded-full flex items-center justify-center mx-auto mb-6 border border-zinc-850">
+                        <Search className="w-6 h-6 text-zinc-500" />
+                      </div>
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2">No Matches Found</h3>
+                      <p className="text-sm text-zinc-400 font-sans leading-relaxed">
+                        Can't find keyword related to this, try again.
+                      </p>
+                    </div>
+                  );
+                }
 
                 return (
-                  /* Results Displayed (Strictly Personalize To Chosen Exam and Active Category Tab) */
-                  <div className="space-y-8 pt-2">
-                    <div className="flex justify-between items-center pb-2 border-b border-[#1A1A1A]">
-                      <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-                        {activeExploreTab === 'home' ? `Global Catalog (${examFilter} stream)` : `Category Search: ${activeExploreTab?.toUpperCase()}`}
-                      </h3>
-                      {activeExploreTab !== 'home' && (
-                        <span className="text-[10px] font-mono text-zinc-500 uppercase">Filtered specifically inside {activeExploreTab}</span>
-                      )}
+                  <div className="space-y-6">
+                    {/* YouTube-Style Horizontal Category Pill Filtering */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-3 pt-1 no-scrollbar border-b border-zinc-900/60">
+                      {[
+                        { id: 'all', label: 'All Results' },
+                        { id: 'lecture', label: `Lectures (${filteredLectures.length})` },
+                        { id: 'playlist', label: `Playlists (${filteredPlaylists.length})` },
+                        { id: 'teacher', label: `Educators (${filteredTeachers.length})` },
+                        { id: 'batch', label: `Batches (${filteredBatches.length})` },
+                        { id: 'test', label: `Mock Tests (${filteredTestSeries.length})` },
+                        { id: 'institute', label: `Institutes (${filteredInstitutes.length})` },
+                      ].map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setSearchSubTab(tab.id as any)}
+                          className={`px-4 py-1.5 rounded-full text-[11px] font-sans font-medium select-none whitespace-nowrap border transition-all cursor-pointer ${
+                            searchSubTab === tab.id
+                              ? 'bg-white text-black border-white'
+                              : 'bg-[#0E0E0E] hover:bg-[#151515] border-zinc-850 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* 1. Lectures Results */}
-                    {showLectures && (
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-mono tracking-widest text-[#666] uppercase">Matching video lessons ({filteredLectures.length})</h4>
-                        {filteredLectures.length === 0 ? (
-                          <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No curriculum lessons matches your search.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                            {filteredLectures.map(lec => {
-                              const formattedSub = "182K";
-                              const lectureDto = {
-                                ...lec,
-                                channel: {
-                                  id: lec.teacherId || 'unknown',
-                                  name: lec.teacherName || 'Verified Educator',
-                                  avatarUrl: null,
-                                  bannerUrl: null,
-                                  subscriberCountRaw: 182000,
-                                  subscriberCountFormatted: formattedSub
-                                }
-                              };
+                    {/* Results Displayed (Strictly Personalize To Chosen Exam and Active Category Tab) */}
+                    <div className="space-y-8 pt-2">
+                      
+                      {/* 1. Lectures Results */}
+                      {showLectures && (searchSubTab !== 'all' || filteredLectures.length > 0) && (
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono tracking-widest text-zinc-550 uppercase">Video Lectures</h4>
+                          {filteredLectures.length === 0 ? (
+                            <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No matching video lectures available for your query.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                              {filteredLectures.map(lec => {
+                                const formattedSub = "182K";
+                                const lectureDto = {
+                                  ...lec,
+                                  channel: {
+                                    id: lec.teacherId || 'unknown',
+                                    name: lec.teacherName || 'Verified Educator',
+                                    avatarUrl: null,
+                                    bannerUrl: null,
+                                    subscriberCountRaw: 182000,
+                                    subscriberCountFormatted: formattedSub
+                                  }
+                                };
 
-                              return (
-                                <LectureCard
-                                  key={lec.id}
-                                  lecture={lectureDto as any}
-                                  onClick={() => {
-                                    recordSearchQuery(searchQuery);
-                                    setActiveLecture(lec);
-                                    setCurrentView('explore');
-                                  }}
-                                />
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                                return (
+                                  <LectureCard
+                                    key={lec.id}
+                                    lecture={lectureDto as any}
+                                    onClick={() => {
+                                      recordSearchQuery(searchQuery);
+                                      setActiveLecture(lec);
+                                      setCurrentView('explore');
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                    {/* 2. Educators Results */}
-                    {showTeachers && (
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-mono tracking-widest text-[#666] uppercase">Matching educators & scholars ({filteredTeachers.length})</h4>
-                        {filteredTeachers.length === 0 ? (
-                          <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No specialists found for the selected category.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredTeachers.map(t => (
-                              <div key={t.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex gap-4 text-left items-center">
-                                <img src={t.avatar} alt={t.name} className="w-12 h-12 rounded-full object-cover shrink-0 border border-neutral-800" />
-                                <div className="flex-1 min-w-0 space-y-2">
-                                  <div>
-                                    <h5 className="text-xs font-bold text-white uppercase tracking-tight">{t.name}</h5>
-                                    <span className="text-[9px] text-zinc-400 uppercase font-mono tracking-wider">Specialist Mentor</span>
+                      {/* 2. Educators Results */}
+                      {showTeachers && (searchSubTab !== 'all' || filteredTeachers.length > 0) && (
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono tracking-widest text-zinc-550 uppercase">Educators & Gurus</h4>
+                          {filteredTeachers.length === 0 ? (
+                            <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No educators found matching your query.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {filteredTeachers.map(t => (
+                                <div key={t.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex gap-4 text-left items-center">
+                                  <img src={t.avatar} alt={t.name} className="w-12 h-12 rounded-full object-cover shrink-0 border border-neutral-800 animate-in fade-in duration-300" />
+                                  <div className="flex-1 min-w-0 space-y-2">
+                                    <div>
+                                      <h5 className="text-xs font-bold text-white uppercase tracking-tight">{t.name}</h5>
+                                      <span className="text-[9px] text-zinc-400 uppercase font-mono tracking-wider">Specialist Mentor</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => {
+                                          recordSearchQuery(searchQuery);
+                                          setDetailModal({ id: t.id, type: 'teacher' });
+                                        }}
+                                        className="text-[9px] font-mono uppercase bg-zinc-900 hover:bg-zinc-950 px-3 py-1 rounded-full border border-neutral-800 text-white cursor-pointer"
+                                      >
+                                        Portal
+                                      </button>
+                                      <button
+                                        onClick={() => handleFollowToggle(t)}
+                                        className="text-[9px] font-mono uppercase px-3 py-1 bg-zinc-950 text-zinc-400 hover:text-white rounded-full border border-neutral-800 cursor-pointer"
+                                      >
+                                        {followedIds.includes(t.id) ? 'Followed' : 'Follow'}
+                                      </button>
+                                    </div>
                                   </div>
-                                  <div className="flex gap-2">
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 3. Playlist Channels Results */}
+                      {showPlaylists && (searchSubTab !== 'all' || filteredPlaylists.length > 0) && (
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono tracking-widest text-zinc-550 uppercase">Curated Subject Playlists</h4>
+                          {filteredPlaylists.length === 0 ? (
+                            <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No curated playlists matched your query.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {filteredPlaylists.map(p => (
+                                <div key={p.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex flex-col justify-between text-left gap-3">
+                                  <div className="space-y-1">
+                                    <h5 className="text-xs font-bold text-white uppercase tracking-tight mt-1 line-clamp-1">{p.title}</h5>
+                                    <p className="text-[10px] text-zinc-450 leading-relaxed line-clamp-2">{p.description}</p>
+                                  </div>
+                                  <div className="pt-2 border-t border-neutral-900 flex justify-between items-center text-[10px] text-zinc-500 font-mono">
+                                    <span>By {p.teacherName}</span>
                                     <button
                                       onClick={() => {
                                         recordSearchQuery(searchQuery);
-                                        setDetailModal({ id: t.id, type: 'teacher' });
+                                        handleSelectPlaylist(p);
                                       }}
-                                      className="text-[9px] font-mono uppercase bg-zinc-900 hover:bg-zinc-950 px-3 py-1 rounded-full border border-neutral-800 text-white cursor-pointer"
+                                      className="text-white hover:underline text-[9px] uppercase font-bold"
                                     >
-                                      Portal
+                                      View Folder
                                     </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 4. Live Batches Results */}
+                      {showBatches && (searchSubTab !== 'all' || filteredBatches.length > 0) && (
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono tracking-widest text-zinc-550 uppercase">Live Student Cohorts</h4>
+                          {filteredBatches.length === 0 ? (
+                            <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No live cohorts matched your query.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {filteredBatches.map(b => (
+                                <BatchCard
+                                  key={b.id}
+                                  batch={b}
+                                  onClick={() => setDetailModal({ id: b.id, type: 'batch' as any })}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 5. Mock Test Series Results */}
+                      {showTests && (searchSubTab !== 'all' || filteredTestSeries.length > 0) && (
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono tracking-widest text-zinc-550 uppercase">Mock Practice Test Series</h4>
+                          {filteredTestSeries.length === 0 ? (
+                            <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No mock test series available matching your search.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {filteredTestSeries.map(ts => (
+                                <div key={ts.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex flex-col justify-between text-left gap-3">
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-[9px] font-mono font-bold bg-zinc-800 text-zinc-350 px-2 py-0.5 rounded uppercase">{ts.examType}</span>
+                                      <span className="text-[10px] font-mono text-white/50">{ts.subjects ? ts.subjects[0] : 'Syllabus Mapped'}</span>
+                                    </div>
+                                    <h5 className="text-xs font-bold text-white uppercase truncate tracking-tight">{ts.name}</h5>
+                                    <p className="text-[10px] text-zinc-405 line-clamp-1">{ts.description}</p>
+                                  </div>
+                                  <div className="pt-2 border-t border-neutral-900 flex justify-between items-center text-[10px] text-zinc-500 font-mono">
+                                    <DynamicRating targetId={ts.id} className="text-zinc-500 font-mono text-[9px] flex items-center gap-1" textClassName="hidden" />
                                     <button
-                                      onClick={() => handleFollowToggle(t)}
-                                      className="text-[9px] font-mono uppercase px-3 py-1 bg-zinc-950 text-zinc-400 hover:text-white rounded-full border border-neutral-800 cursor-pointer"
+                                      onClick={() => {
+                                        setCurrentView('explore');
+                                        setActiveExploreTab('tests');
+                                      }}
+                                      className="text-white hover:underline text-[9px] uppercase font-bold"
                                     >
-                                      {followedIds.includes(t.id) ? 'Followed' : 'Follow'}
+                                      Go To Tests
                                     </button>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                    {/* 3. Playlist Channels Results */}
-                    {showPlaylists && (
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-mono tracking-widest text-[#666] uppercase">Matching curated playlists ({filteredPlaylists.length})</h4>
-                        {filteredPlaylists.length === 0 ? (
-                          <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No curated playlist channels match the query.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredPlaylists.map(p => (
-                              <div key={p.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex flex-col justify-between text-left gap-3">
-                                <div className="space-y-1">
-                                  <h5 className="text-xs font-bold text-white uppercase tracking-tight mt-1 line-clamp-1">{p.title}</h5>
-                                  <p className="text-[10px] text-zinc-450 leading-relaxed line-clamp-2">{p.description}</p>
-                                </div>
-                                <div className="pt-2 border-t border-neutral-900 flex justify-between items-center text-[10px] text-zinc-500 font-mono">
-                                  <span>By {p.teacherName}</span>
-                                  <button
-                                    onClick={() => {
-                                      recordSearchQuery(searchQuery);
-                                      handleSelectPlaylist(p);
-                                    }}
-                                    className="text-white hover:underline text-[9px] uppercase font-bold"
-                                  >
-                                    View Folder
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 4. Live Batches Results */}
-                    {showBatches && (
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-mono tracking-widest text-[#666] uppercase">Matching live student cohorts ({filteredBatches.length})</h4>
-                        {filteredBatches.length === 0 ? (
-                          <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No structured course batches available.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredBatches.map(b => (
-                              <BatchCard
-                                key={b.id}
-                                batch={b}
-                                onClick={() => setDetailModal({ id: b.id, type: 'batch' as any })}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 5. Mock Test Series Results */}
-                    {showTests && (
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-mono tracking-widest text-[#666] uppercase">Matching mock test series ({filteredTestSeries.length})</h4>
-                        {filteredTestSeries.length === 0 ? (
-                          <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No mock test series available.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredTestSeries.map(ts => (
-                              <div key={ts.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex flex-col justify-between text-left gap-3">
-                                <div className="space-y-1">
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-[9px] font-mono font-bold bg-zinc-800 text-zinc-350 px-2 py-0.5 rounded uppercase">{ts.examType}</span>
-                                    <span className="text-[10px] font-mono text-white/50">{ts.subjects ? ts.subjects[0] : 'Syllabus Mapped'}</span>
+                      {/* 6. Active Institutes Results */}
+                      {showInstitutes && (searchSubTab !== 'all' || filteredInstitutes.length > 0) && (
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono tracking-widest text-zinc-550 uppercase">Academic Institutes & Portals</h4>
+                          {filteredInstitutes.length === 0 ? (
+                            <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No matched affiliated centers found.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {filteredInstitutes.map(inst => (
+                                <div key={inst.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex gap-4 text-left items-center">
+                                  <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-neutral-800 flex items-center justify-center font-mono text-zinc-405 text-lg font-bold uppercase">
+                                    {inst.name[0]}
                                   </div>
-                                  <h5 className="text-xs font-bold text-white uppercase truncate tracking-tight">{ts.name}</h5>
-                                  <p className="text-[10px] text-zinc-405 line-clamp-1">{ts.description}</p>
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className="text-xs font-bold text-white uppercase tracking-tight">{inst.name}</h5>
+                                    <p className="text-[9px] text-zinc-500 font-mono">TRUST SCORE: {inst.trustRank}%</p>
+                                    <button
+                                      onClick={() => {
+                                        setCurrentView('explore');
+                                        setActiveExploreTab('institutes');
+                                      }}
+                                      className="text-[9px] font-mono text-white hover:underline mt-1 block"
+                                    >
+                                      Visit Hub
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="pt-2 border-t border-neutral-900 flex justify-between items-center text-[10px] text-zinc-500 font-mono">
-                                  <DynamicRating targetId={ts.id} className="text-zinc-500 font-mono text-[9px] flex items-center gap-1" textClassName="hidden" />
-                                  <button
-                                    onClick={() => {
-                                      setCurrentView('explore');
-                                      setActiveExploreTab('tests');
-                                    }}
-                                    className="text-white hover:underline text-[9px] uppercase font-bold"
-                                  >
-                                    Go To Tests
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                    {/* 6. Active Institutes Results */}
-                    {showInstitutes && (
-                      <div className="space-y-4">
-                        <h4 className="text-[10px] font-mono tracking-widest text-[#666] uppercase">Matching academic institutes ({filteredInstitutes.length})</h4>
-                        {filteredInstitutes.length === 0 ? (
-                          <p className="text-[11px] text-zinc-500 font-mono p-4 rounded-xl bg-[#0A0A0A] border border-[#131415]">No matched affiliate portals found.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredInstitutes.map(inst => (
-                              <div key={inst.id} className="bg-[#0D0D0D] border border-neutral-900 rounded-2xl p-4 flex gap-4 text-left items-center">
-                                <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-neutral-800 flex items-center justify-center font-mono text-zinc-405 text-lg font-bold uppercase">
-                                  {inst.name[0]}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h5 className="text-xs font-bold text-white uppercase tracking-tight">{inst.name}</h5>
-                                  <p className="text-[9px] text-zinc-500 font-mono">TRUST SCORE: {inst.trustRank}%</p>
-                                  <button
-                                    onClick={() => {
-                                      setCurrentView('explore');
-                                      setActiveExploreTab('institutes');
-                                    }}
-                                    className="text-[9px] font-mono text-white hover:underline mt-1 block"
-                                  >
-                                    Visit Hub
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      {/* Safe Fallback: No active sections returned any records in "All Results" */}
+                      {searchSubTab === 'all' && countActive === 0 && (
+                        <div className="text-center py-16 bg-[#09090A] border border-zinc-900/80 rounded-2xl p-6">
+                          <p className="text-xs text-zinc-400 font-sans max-w-sm mx-auto leading-relaxed">
+                            No indexed directory entries matched <span className="text-white font-bold">"{searchQuery}"</span>. Please double-check your spelling, adjust filters, or browse other categories.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
+              </div>
             </div>
           ) : currentView === 'profile' && user ? (
             <ProfileDashboard
@@ -1696,6 +1970,7 @@ function AppContent() {
               }}
               onOpenTeacher={(teacherId) => setDetailModal({ id: teacherId, type: 'teacher' })}
               activeLecture={activeLecture}
+              onLogoutSuccess={() => setCurrentView('explore')}
             />
           ) : currentView === 'moderator' && user?.email === 'adarshaman898@gmail.com' ? (
             <ModeratorDashboard />
@@ -2220,18 +2495,18 @@ function AppContent() {
             </>
           )}
 
-              {/* Exact Mock Screenshot Match Footer Navigation Bar (Hidden when activeLecture is playing to block distraction) */}
-              {!activeLecture && (
+              {/* Exact Mock Screenshot Match Footer Navigation Bar (Hidden when activeLecture is playing or in search view to block distraction) */}
+              {!activeLecture && currentView !== 'search' && (
                 <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#060606]/98 border-t border-[#121212]/95 shadow-2xl h-[58px] xs:h-[72px] px-1 xs:px-4 md:px-8 flex justify-around items-center backdrop-blur-md select-none">
                 <div className="flex justify-around items-center w-full max-w-5xl mx-auto h-full gap-0.5 xs:gap-1.5 flex-nowrap overflow-hidden">
                   {[
                     { id: 'home', label: 'Home', icon: Home },
                     { id: 'teachers', label: 'Teachers', icon: Users },
-                    { id: 'playlists', label: 'Verse', icon: PlaySquare },
+                    { id: 'playlists', label: 'Playlist', icon: PlaySquare },
                     { id: 'tests', label: 'Tests', icon: ClipboardCheck },
-                    { id: 'batches', label: 'Batches', icon: Layers },
+                    { id: 'batches', label: 'One Shot', icon: Layers },
                     { id: 'lecture', label: 'Lecture', icon: Video },
-                    { id: 'institutes', label: 'Channels', icon: Building2 }
+                    { id: 'institutes', label: 'Institutes', icon: Building2 }
                   ].map((t) => {
                     const Icon = t.icon;
                     const isActive = currentView === 'explore' && activeExploreTab === t.id;
@@ -2298,13 +2573,6 @@ function AppContent() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-      />
-
-      {/* Onboarding gateway portal for first-time visits */}
-      <OnboardingGateway
-        onOpenAuth={(mode) => {
-          setAuthModalOpen(true);
-        }}
       />
 
       <SearchSpecsModal

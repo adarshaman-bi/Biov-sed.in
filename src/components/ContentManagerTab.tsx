@@ -6,8 +6,9 @@ import {
   Playlist, 
   Lecture 
 } from '../types';
-import { db, auth } from '../firebase';
 import { 
+  db, 
+  auth,
   collection, 
   doc, 
   query, 
@@ -19,7 +20,7 @@ import {
   limit, 
   where,
   increment
-} from 'firebase/firestore';
+} from '../firebase';
 import {
   Youtube,
   Play,

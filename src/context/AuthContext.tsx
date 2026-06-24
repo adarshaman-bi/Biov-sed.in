@@ -1,22 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import {
-  User,
-  signInWithPopup,
-  GoogleAuthProvider,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
-import { auth } from '../firebase';
+import { supabase } from '../utils/supabaseClient';
 import { fetchUserProfile, createUserProfile, updateUserExamPreference, updateUserPreferences } from '../services/dbService';
 import { UserProfile, UserRole } from '../types';
 import { seedInitialDatabase } from '../seeder';
 
 interface AuthContextType {
   user: UserProfile | null;
-  firebaseUser: User | null;
+  firebaseUser: any | null; // Named firebaseUser for strict backwards-compatibility with user state consumers
   loading: boolean;
   signInGoogle: () => Promise<void>;
   signInEmail: (email: string, pw: string) => Promise<void>;
@@ -99,7 +89,7 @@ const getGuestProfile = (): UserProfile => {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
@@ -109,57 +99,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     seedInitialDatabase();
   }, []);
 
+  const handleAuthUser = async (sUser: any) => {
+    if (sUser) {
+      setFirebaseUser(sUser);
+      setIsGuest(false);
+      localStorage.removeItem('biovised_is_guest'); // block guest persistence once real credentials take over
+      
+      // Load custom profile
+      let profile = await fetchUserProfile(sUser.id);
+      const isAdminEmail = sUser.email === 'adarshaman898@gmail.com';
+      if (!profile) {
+        // If no profile, bootstrap user role profile
+        const now = new Date().toISOString();
+        const displayName = sUser.user_metadata?.displayName || sUser.user_metadata?.full_name || 'Pupil';
+        await createUserProfile({
+          uid: sUser.id,
+          email: sUser.email || '',
+          displayName: displayName,
+          role: isAdminEmail ? 'admin' : 'user',
+          examType: 'NEET',
+          createdAt: now,
+          updatedAt: now,
+        });
+        profile = await fetchUserProfile(sUser.id);
+      } else if (isAdminEmail && profile.role !== 'admin') {
+        profile.role = 'admin';
+      }
+      setUser(profile);
+    } else {
+      setFirebaseUser(null);
+      // Force guest mode as default if not logged into Google/Firebase, bypassing any gate selection screen
+      setIsGuest(true);
+      localStorage.setItem('biovised_is_guest', 'true');
+      setUser(getGuestProfile());
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
-      setLoading(true);
-      if (fUser) {
-        setFirebaseUser(fUser);
-        setIsGuest(false);
-        localStorage.removeItem('biovised_is_guest'); // block guest persistence once real credentials take over
-        // Load custom profile
-        let profile = await fetchUserProfile(fUser.uid);
-        const isAdminEmail = fUser.email === 'adarshaman898@gmail.com';
-        if (!profile) {
-          // If no profile, bootstrap user role profile
-          const now = new Date().toISOString();
-          await createUserProfile({
-            uid: fUser.uid,
-            email: fUser.email || '',
-            displayName: fUser.displayName || 'Pupil',
-            role: isAdminEmail ? 'admin' : 'user',
-            examType: 'NEET',
-            createdAt: now,
-            updatedAt: now,
-          });
-          profile = await fetchUserProfile(fUser.uid);
-        } else if (isAdminEmail && profile.role !== 'admin') {
-          profile.role = 'admin';
-        }
-        setUser(profile);
-      } else {
-        setFirebaseUser(null);
-        const cachedGuest = localStorage.getItem('biovised_is_guest') === 'true';
-        if (cachedGuest) {
-          setIsGuest(true);
-          setUser(getGuestProfile());
-        } else {
-          setIsGuest(false);
-          setUser(null);
-        }
+    setLoading(true);
+    
+    // Retrieve the current active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleAuthUser(session?.user || null);
+    }).catch((err) => {
+      if (!err?.message?.includes('Invalid API key')) {
+        console.warn('Failed to retrieve initial session from Supabase:', err);
       }
       setLoading(false);
     });
 
-    return unsubscribe;
+    // Listen to real-time session changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      handleAuthUser(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInGoogle = async () => {
     setLoading(true);
-    const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error('Google Auth Popup failed:', err);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Google Auth helper failed:', err);
       throw err;
     } finally {
       setLoading(false);
@@ -169,7 +180,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInEmail = async (email: string, pw: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, pw);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pw
+      });
+      if (error) throw error;
     } catch (err) {
       console.error('Email sign in failed:', err);
       throw err;
@@ -187,23 +202,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     setLoading(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, pw);
-      // Wait to create user profile in DB
-      await createUserProfile({
-        uid: cred.user.uid,
-        email: email,
-        displayName: name,
-        role: role,
-        examType: exam,
-        appearingYear: '2026',
-        preferredSubjects: [],
-        watchedContent: [],
-        savedContent: [],
-        hiddenContent: [],
-        likedContent: [],
-        onboardingCompleted: false,
-        loginType: 'email'
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: pw,
+        options: {
+          data: {
+            displayName: name,
+            role: role,
+            examType: exam
+          }
+        }
       });
+      if (error) throw error;
+
+      const userId = data.user?.id;
+      if (userId) {
+        // Wait to create user profile in DB
+        await createUserProfile({
+          uid: userId,
+          email: email,
+          displayName: name,
+          role: role,
+          examType: exam,
+          appearingYear: '2026',
+          preferredSubjects: [],
+          watchedContent: [],
+          savedContent: [],
+          hiddenContent: [],
+          likedContent: [],
+          onboardingCompleted: false,
+          loginType: 'email'
+        });
+      }
     } catch (err) {
       console.error('Email registration failed:', err);
       throw err;
@@ -213,13 +243,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const sendPasswordReset = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+    if (error) throw error;
   };
 
   const logout = async () => {
     setLoading(true);
-    setIsGuest(false);
-    localStorage.removeItem('biovised_is_guest');
+    setIsGuest(true);
+    try {
+      sessionStorage.removeItem('biovised_guest_bypassed');
+    } catch {}
     localStorage.removeItem('biovised_pref_onboardingCompleted');
     localStorage.removeItem('biovised_pref_examType');
     localStorage.removeItem('biovised_pref_appearingYear');
@@ -228,19 +263,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('biovised_pref_savedContent');
     localStorage.removeItem('biovised_pref_hiddenContent');
     localStorage.removeItem('biovised_pref_likedContent');
+    localStorage.setItem('biovised_is_guest', 'true');
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (err) {
-      console.warn('Firebase signOut exception bypassed:', err);
+      console.warn('Supabase signOut exception bypassed:', err);
     }
-    setUser(null);
     setFirebaseUser(null);
+    setUser(getGuestProfile());
     setLoading(false);
   };
 
   const setExamPreference = async (exam: 'JEE' | 'NEET' | 'Both' | string) => {
     if (user) {
-      await updateUserExamPreference(user.uid, exam);
+      const userId = user.uid;
+      await updateUserExamPreference(userId, exam);
       setUser(prev => prev ? { ...prev, examType: exam } : null);
     }
   };
@@ -253,7 +291,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePreferences = async (newPrefs: Partial<UserProfile>) => {
-    if (isGuest || !firebaseUser || user?.uid === 'guest') {
+    const isUserGuest = isGuest || !firebaseUser || user?.uid === 'guest';
+    if (isUserGuest) {
       if (newPrefs.examType !== undefined) localStorage.setItem('biovised_pref_examType', newPrefs.examType);
       if (newPrefs.appearingYear !== undefined) localStorage.setItem('biovised_pref_appearingYear', newPrefs.appearingYear);
       if (newPrefs.preferredSubjects !== undefined) localStorage.setItem('biovised_pref_preferredSubjects', JSON.stringify(newPrefs.preferredSubjects));
@@ -265,13 +304,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       setUser(getGuestProfile());
     } else if (firebaseUser) {
+      const userId = firebaseUser.id || firebaseUser.uid;
       const sanitizedPrefs = { ...newPrefs };
       delete sanitizedPrefs.uid;
       delete sanitizedPrefs.email;
       delete sanitizedPrefs.role;
       delete sanitizedPrefs.createdAt;
       
-      await updateUserPreferences(firebaseUser.uid, sanitizedPrefs);
+      await updateUserPreferences(userId, sanitizedPrefs);
       setUser(prev => {
         if (!prev) return null;
         return {
@@ -295,7 +335,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingCompleted: false
     };
 
-    if (isGuest || !firebaseUser || user?.uid === 'guest') {
+    const isUserGuest = isGuest || !firebaseUser || user?.uid === 'guest';
+    if (isUserGuest) {
       localStorage.removeItem('biovised_pref_examType');
       localStorage.removeItem('biovised_pref_appearingYear');
       localStorage.removeItem('biovised_pref_preferredSubjects');
@@ -308,7 +349,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsGuest(false);
       setUser(null);
     } else if (firebaseUser) {
-      await updateUserPreferences(firebaseUser.uid, emptyPrefs);
+      const userId = firebaseUser.id || firebaseUser.uid;
+      await updateUserPreferences(userId, emptyPrefs);
       setUser(prev => prev ? { ...prev, ...emptyPrefs, updatedAt: new Date().toISOString() } : null);
     }
   };

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db, collection, getDocs, doc, setDoc } from '../../firebase';
 import { SecurityAuditEntry } from '../../services/adminService';
 import { Shield, Search, Terminal, AlertCircle, RefreshCw, Calendar, ArrowRight, Activity } from 'lucide-react';
 

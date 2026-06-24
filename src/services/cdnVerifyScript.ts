@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 /**
  * ============================================================================
  * PHASE 2: IMMUTABLE UPLOAD UTILITY & DYNAMIC URL RESOLVER

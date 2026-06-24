@@ -1,5 +1,4 @@
-import { storage } from '../firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { storage, ref, getDownloadURL } from '../firebase';
 
 export class MediaResolverService {
   private static cache: Record<string, string> = {};

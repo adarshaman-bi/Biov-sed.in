@@ -22,6 +22,7 @@ interface HeaderProps {
   searchSuggestions?: string[];
   currentExamType?: string;
   onVoiceSearchClick?: () => void;
+  onLogoClick?: () => void;
 }
 
 export default function Header({
@@ -39,9 +40,10 @@ export default function Header({
   onFocus,
   searchSuggestions = [],
   currentExamType = 'NEET',
-  onVoiceSearchClick
+  onVoiceSearchClick,
+  onLogoClick
 }: HeaderProps) {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const [isFocused, setIsFocused] = useState(false);
   const hasUnread = notifications.some(n => !n.read);
 
@@ -106,8 +108,12 @@ export default function Header({
       <div className="flex items-center">
         <button
           onClick={() => {
-            onSearchChange('');
-            onViewDashboard('explore');
+            if (onLogoClick) {
+              onLogoClick();
+            } else {
+              onSearchChange('');
+              onViewDashboard('explore');
+            }
           }}
           className="flex items-center focus:outline-none cursor-pointer"
         >
@@ -310,7 +316,7 @@ export default function Header({
 
       {/* Utilities: Notifications, Profile, and Console */}
       <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-        {user ? (
+        {user && !isGuest ? (
           <>
             {/* Notification alert container */}
             <button
@@ -377,7 +383,7 @@ export default function Header({
             {/* Sign in extra CTA button */}
             <button
               onClick={onOpenAuth}
-              className="hidden sm:inline bg-white hover:bg-zinc-205 text-black text-xs font-bold py-1.5 px-4 rounded-full transition-all cursor-pointer"
+              className="hidden sm:inline bg-white hover:bg-zinc-200 text-black text-xs font-bold py-1.5 px-4 rounded-full transition-all cursor-pointer"
             >
               Sign in
             </button>
