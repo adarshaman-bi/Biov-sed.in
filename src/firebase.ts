@@ -103,12 +103,18 @@ export function doc(dbObj: any, path?: any, ...subpaths: any[]): any {
 
 export async function getDoc(docRef: any) {
   const path = docRef?.path || '';
-  const parts = path.split('/');
-  const collectionName = parts[0];
-  const docId = parts[1];
+  if (!path) {
+    return {
+      exists: () => false,
+      data: () => null,
+      id: ''
+    };
+  }
+  const key = `fs_mock_${path.replace(/\//g, '_')}`;
+  const docId = docRef?.id || path.split('/').pop() || '';
   
   // Try to load any overrides from localStorage first
-  const existing = localStorage.getItem(`fs_mock_${collectionName}_${docId}`);
+  const existing = localStorage.getItem(key);
   if (existing) {
     const parsed = JSON.parse(existing);
     return {
@@ -119,9 +125,12 @@ export async function getDoc(docRef: any) {
   }
 
   // Fallback to static master import structures
-  if (collectionName === 'teachers') {
-    const match = localMasterImport?.teachers?.find((t: any) => t.id === docId);
-    if (match) return { exists: () => true, data: () => match, id: docId };
+  const parts = path.split('/');
+  const collectionName = parts[0];
+  const firstDocId = parts[1];
+  if (collectionName === 'teachers' && parts.length === 2) {
+    const match = localMasterImport?.teachers?.find((t: any) => t.id === firstDocId);
+    if (match) return { exists: () => true, data: () => match, id: firstDocId };
   }
   
   return {
@@ -133,12 +142,18 @@ export async function getDoc(docRef: any) {
 
 export async function getDocs(queryObj: any): Promise<any> {
   const path = queryObj?.path || (queryObj?.collectionRef ? queryObj.collectionRef.path : '');
-  const collectionName = path.split('/')[0];
+  if (!path) {
+    return {
+      docs: [],
+      empty: true,
+      size: 0,
+      forEach: () => {}
+    };
+  }
 
-  // Fetch local storage overrides
+  const prefix = `fs_mock_${path.replace(/\//g, '_')}_`;
   const keys = Object.keys(localStorage);
   const localItems: any[] = [];
-  const prefix = `fs_mock_${collectionName}_`;
   for (const k of keys) {
     if (k.startsWith(prefix)) {
       try {
@@ -147,68 +162,61 @@ export async function getDocs(queryObj: any): Promise<any> {
     }
   }
 
-  // If there are overrides, we merge/use them. Else fallback to base datasets
-  if (localItems.length === 0) {
-    let docsArr: any[] = [];
-    if (collectionName === 'teachers') {
-      docsArr = (localMasterImport?.teachers || []).map((t: any) => ({
-        data: () => t,
-        id: t.id,
-        ref: { type: 'doc', path: `teachers/${t.id}` }
-      }));
-    } else if (collectionName === 'test_series') {
-      docsArr = (localMasterImport?.test_series || []).map((t: any) => ({
-        data: () => t,
-        id: t.id,
-        ref: { type: 'doc', path: `test_series/${t.id}` }
-      }));
-    } else if (collectionName === 'playlists') {
-      docsArr = (localPlaylistsJson || []).map((p: any) => ({
-        data: () => p,
-        id: p.id,
-        ref: { type: 'doc', path: `playlists/${p.id}` }
-      }));
-    } else if (collectionName === 'videos' || collectionName === 'lectures') {
-      docsArr = (localVideosJson || []).map((v: any) => ({
-        data: () => v,
-        id: v.id,
-        ref: { type: 'doc', path: `${collectionName}/${v.id}` }
-      }));
-    }
-    return {
-      docs: docsArr,
-      empty: docsArr.length === 0,
-      size: docsArr.length,
-      forEach: (callback: (d: any) => void) => {
-        docsArr.forEach(callback);
-      }
-    };
+  // Determine base static array if applicable
+  let baseItems: any[] = [];
+  const parts = path.split('/');
+  const collectionName = parts[0];
+  if (collectionName === 'teachers' && parts.length === 1) {
+    baseItems = localMasterImport?.teachers || [];
+  } else if (collectionName === 'test_series' && parts.length === 1) {
+    baseItems = localMasterImport?.test_series || [];
+  } else if (collectionName === 'playlists' && parts.length === 1) {
+    baseItems = localPlaylistsJson || [];
+  } else if ((collectionName === 'videos' || collectionName === 'lectures') && parts.length === 1) {
+    baseItems = localVideosJson || [];
   }
 
-  const finalDocs = localItems.map((item: any) => ({
-    data: () => item,
-    id: item.id,
-    ref: { type: 'doc', path: `${collectionName}/${item.id}` }
-  }));
+  const mergedMap = new Map<string, any>();
+  
+  // Add base static items first
+  baseItems.forEach((item: any) => {
+    if (item && item.id) {
+      mergedMap.set(item.id, item);
+    }
+  });
+
+  // Overwrite or append with local overrides/creations
+  localItems.forEach((item: any) => {
+    if (item && item.id) {
+      mergedMap.set(item.id, item);
+    }
+  });
+
+  const finalDocsArr = Array.from(mergedMap.values()).map((item: any) => {
+    const itemId = item.id || '';
+    return {
+      data: () => item,
+      id: itemId,
+      ref: { type: 'doc', path: `${path}/${itemId}` }
+    };
+  });
 
   return {
-    docs: finalDocs,
-    empty: finalDocs.length === 0,
-    size: finalDocs.length,
+    docs: finalDocsArr,
+    empty: finalDocsArr.length === 0,
+    size: finalDocsArr.length,
     forEach: (callback: (d: any) => void) => {
-      finalDocs.forEach(callback);
+      finalDocsArr.forEach(callback);
     }
   };
 }
 
 export async function setDoc(docRef: any, data: any, options?: any) {
   const path = docRef?.path || '';
-  const parts = path.split('/');
-  const collectionName = parts[0];
-  const docId = parts[1];
+  if (!path) return;
+  const key = `fs_mock_${path.replace(/\//g, '_')}`;
   
   if (options?.merge) {
-    const key = `fs_mock_${collectionName}_${docId}`;
     const existing = localStorage.getItem(key);
     const current = existing ? JSON.parse(existing) : {};
     const updated = { ...current, ...data };
@@ -216,15 +224,13 @@ export async function setDoc(docRef: any, data: any, options?: any) {
     return;
   }
   
-  localStorage.setItem(`fs_mock_${collectionName}_${docId}`, JSON.stringify(data));
+  localStorage.setItem(key, JSON.stringify(data));
 }
 
 export async function updateDoc(docRef: any, updates: any) {
   const path = docRef?.path || '';
-  const parts = path.split('/');
-  const collectionName = parts[0];
-  const docId = parts[1];
-  const key = `fs_mock_${collectionName}_${docId}`;
+  if (!path) return;
+  const key = `fs_mock_${path.replace(/\//g, '_')}`;
   const existing = localStorage.getItem(key);
   const current = existing ? JSON.parse(existing) : {};
   const updated = { ...current, ...updates };
@@ -233,10 +239,9 @@ export async function updateDoc(docRef: any, updates: any) {
 
 export async function deleteDoc(docRef: any) {
   const path = docRef?.path || '';
-  const parts = path.split('/');
-  const collectionName = parts[0];
-  const docId = parts[1];
-  localStorage.removeItem(`fs_mock_${collectionName}_${docId}`);
+  if (!path) return;
+  const key = `fs_mock_${path.replace(/\//g, '_')}`;
+  localStorage.removeItem(key);
 }
 
 export function query(collectionRef: any, ...constraints: any[]): any {

@@ -516,6 +516,33 @@ function AppContent() {
   const [isListening, setIsListening] = useState<boolean>(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
 
+  const [utcTime, setUtcTime] = useState<string>('');
+  const [utcDateStr, setUtcDateStr] = useState<string>('');
+  const [customName, setCustomName] = useState<string>(() => {
+    return localStorage.getItem('biovised_custom_name') || '';
+  });
+  const [nameInput, setNameInput] = useState<string>('');
+  const [isEditingName, setIsEditingName] = useState<boolean>(false);
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const timeStr = now.toUTCString().split(' ')[4] + ' UTC';
+      const dateStr = now.toLocaleDateString('en-US', {
+        timeZone: 'UTC',
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      setUtcTime(timeStr);
+      setUtcDateStr(dateStr);
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const startSpeechRecognition = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -596,6 +623,7 @@ function AppContent() {
   const [contentTypeFilter, setContentTypeFilter] = useState<'All' | 'lecture' | 'oneshot'>('All');
   const [sortBy, setSortBy] = useState<'rating' | 'trustScore' | 'popularity'>('trustScore');
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
+  const [isSearchSubmitted, setIsSearchSubmitted] = useState<boolean>(false);
 
   const getCuratedFallback = () => {
     const exam = examFilter || 'NEET';
@@ -638,6 +666,12 @@ function AppContent() {
         }
       })
       .catch(err => console.warn('Suggestions fetch failed:', err));
+
+    if (!isSearchSubmitted) {
+      setServerSearchResults([]);
+      setIsLabourIllusionActive(false);
+      return;
+    }
 
     let illusionTimers: NodeJS.Timeout[] = [];
 
@@ -694,7 +728,7 @@ function AppContent() {
       clearTimeout(timeoutId);
       illusionTimers.forEach(clearTimeout);
     };
-  }, [searchQuery, examFilter, subjectFilter, contentTypeFilter, activeExploreTab]);
+  }, [searchQuery, isSearchSubmitted, examFilter, subjectFilter, contentTypeFilter, activeExploreTab]);
 
   // Trigger splash screen timer & force redirect on finish when auth loading is resolved
   useEffect(() => {
@@ -1523,50 +1557,240 @@ function AppContent() {
           {/* Main conditional views manager */}
           {currentView === 'search' ? (
             <div className="w-full min-h-screen bg-black text-white flex flex-col font-sans -mt-4">
-              {/* Premium Minimal Centered Search Header */}
-              <div className="sticky top-0 z-50 w-full bg-[#070708]/98 backdrop-blur-md border-b border-[#161619] py-4 px-4 flex items-center justify-center shrink-0 animate-in fade-in duration-200">
-                {/* Fixed Clean, Premium Sized Searchbar */}
-                <div className="w-full max-w-lg relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-zinc-500" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search lessons, chapters & educators..."
-                    className="w-full h-11 bg-[#121214] hover:bg-[#151518] border border-[#212124] focus:border-zinc-600 rounded-full pl-11 pr-24 text-xs font-sans text-white placeholder-zinc-550 outline-none transition-all shadow-inner"
-                    autoFocus
-                  />
-                  
-                  {/* Integrated inside-searchbar controls */}
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                    {/* Voice search button */}
-                    <button
-                      type="button"
-                      onClick={startSpeechRecognition}
-                      className="p-1.5 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                      title="Search with Voice"
-                    >
-                      <Mic className="w-3.5 h-3.5" />
-                    </button>
-                    {/* Clean close/exit search button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setCurrentView('explore');
-                        setActiveExploreTab('home');
-                      }}
-                      className="p-1.5 bg-zinc-800/60 hover:bg-zinc-700 hover:text-white text-zinc-300 rounded-full transition-colors cursor-pointer"
-                      title="Exit Search"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+              {searchQuery.trim() === '' ? (
+                /* Premium Center-Aligned Cosmic Slate Card with UTC Clock, Date & Dynamic Greeting */
+                <div className="w-full min-h-[85vh] bg-black text-white flex flex-col justify-center items-center font-sans p-6 relative">
+                  {/* Floating Exit Search / Close Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setCurrentView('explore');
+                      setActiveExploreTab('home');
+                    }}
+                    className="absolute top-6 left-6 flex items-center gap-2 px-3.5 py-2 rounded-full bg-zinc-900/85 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-350 hover:text-white transition-all duration-150 cursor-pointer select-none"
+                    title="Return to Dashboard"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Return</span>
+                  </button>
+
+                  <div className="w-full max-w-lg bg-[#0e0e11] border border-[#1d1d23] rounded-3xl p-8 md:p-12 shadow-[0_0_60px_rgba(0,0,0,0.85)] flex flex-col items-center text-center space-y-8 animate-in fade-in zoom-in-95 duration-300 relative overflow-hidden">
+                    {/* Custom Color Accent Lines */}
+                    <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
+                    <div className="absolute -top-32 w-80 h-80 bg-zinc-800/10 rounded-full blur-3xl pointer-events-none" />
+
+                    {/* REAL-TIME UTC CLOCK */}
+                    <div className="flex flex-col items-center space-y-1 select-none">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        <span className="text-[10px] font-mono tracking-widest text-zinc-500 uppercase font-semibold">Active UTC Sync</span>
+                      </div>
+                      <h4 className="text-3xl font-mono font-bold text-white tracking-wider">
+                        {utcTime || '00:00:00 UTC'}
+                      </h4>
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                        {utcDateStr || 'LOADING SYSTEM DATE'}
+                      </p>
+                    </div>
+
+                    {/* DYNAMIC PERSONALIZED GREETING PROMPT */}
+                    <div className="w-full space-y-4">
+                      {isEditingName || !customName ? (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                          <p className="text-xs font-mono text-zinc-400">Tell us your name to personalize your workspace:</p>
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const trimmed = nameInput.trim();
+                              if (trimmed) {
+                                setCustomName(trimmed);
+                                localStorage.setItem('biovised_custom_name', trimmed);
+                                setIsEditingName(false);
+                              }
+                            }}
+                            className="flex items-center gap-2 max-w-sm mx-auto"
+                          >
+                            <input
+                              type="text"
+                              value={nameInput}
+                              onChange={(e) => setNameInput(e.target.value)}
+                              placeholder="Your nickname..."
+                              className="flex-1 h-9 bg-[#141416] border border-zinc-800 focus:border-zinc-500 rounded-lg px-3 text-xs text-white placeholder-zinc-650 outline-none transition-all"
+                              autoFocus
+                              maxLength={20}
+                            />
+                            <button
+                              type="submit"
+                              className="h-9 px-4 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all cursor-pointer select-none"
+                            >
+                              Continue
+                            </button>
+                            {customName && (
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingName(false)}
+                                className="h-9 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-400 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </form>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                          <h2 className="text-2xl md:text-3xl font-sans font-bold text-white tracking-tight flex items-center justify-center gap-2 flex-wrap">
+                            <span>Hey, <span className="bg-gradient-to-r from-zinc-200 to-white text-transparent bg-clip-text font-black">{customName}</span></span>
+                            <button
+                              onClick={() => {
+                                setNameInput(customName);
+                                setIsEditingName(true);
+                              }}
+                              className="text-[10px] font-mono text-zinc-500 hover:text-white hover:underline uppercase tracking-wider cursor-pointer ml-1"
+                              title="Edit Nickname"
+                            >
+                              [Edit]
+                            </button>
+                          </h2>
+                          <p className="text-xs text-zinc-400 max-w-sm mx-auto font-sans leading-relaxed">
+                            What subject, standard chapter or educator are we seeking today?
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* THE INTEGRATED CENTERED SEARCH BAR */}
+                    <div className="w-full relative max-w-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (searchQuery.trim()) {
+                            setIsSearchSubmitted(true);
+                          }
+                        }}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors cursor-pointer z-10"
+                        title="Run Search"
+                      >
+                        <Search className="w-4 h-4" />
+                      </button>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setIsSearchSubmitted(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setIsSearchSubmitted(true);
+                          }
+                        }}
+                        placeholder="Search lessons, chapters & educators..."
+                        className="w-full h-11 bg-[#131316] hover:bg-[#18181c] border border-zinc-800 focus:border-zinc-550 rounded-full pl-11 pr-24 text-xs font-sans text-white placeholder-zinc-550 outline-none transition-all shadow-inner relative z-0"
+                        autoFocus
+                      />
+                      
+                      {/* Integrated inside-searchbar controls */}
+                      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                        {/* Voice search button */}
+                        <button
+                          type="button"
+                          onClick={startSpeechRecognition}
+                          className="p-1.5 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                          title="Search with Voice"
+                        >
+                          <Mic className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Quick suggestions/guides pill filters under centered search */}
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1 select-none">
+                      {[
+                        'NEET chemistry full one shot',
+                        'JEE main physics solutions',
+                        'H.C. Verma mechanics',
+                        'Aakash minor cheat sheets'
+                      ].map((preset, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setSearchQuery(preset);
+                            setIsSearchSubmitted(true);
+                          }}
+                          className="px-3 py-1.5 bg-[#121214] hover:bg-[#17171a] border border-[#1e1e22] text-[10px] font-sans text-zinc-400 hover:text-zinc-200 rounded-full transition-all cursor-pointer"
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Premium Minimal Centered Search Header (Shown only when typing/active search query is present) */}
+                  <div className="sticky top-0 z-50 w-full bg-[#070708]/98 backdrop-blur-md border-b border-[#161619] py-4 px-4 flex items-center justify-center shrink-0 animate-in fade-in duration-200">
+                    {/* Fixed Clean, Premium Sized Searchbar */}
+                    <div className="w-full max-w-lg relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (searchQuery.trim()) {
+                            setIsSearchSubmitted(true);
+                          }
+                        }}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors cursor-pointer z-10"
+                        title="Run Search"
+                      >
+                        <Search className="w-4.5 h-4.5" />
+                      </button>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setIsSearchSubmitted(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setIsSearchSubmitted(true);
+                          }
+                        }}
+                        placeholder="Search lessons, chapters & educators..."
+                        className="w-full h-11 bg-[#121214] hover:bg-[#151518] border border-[#212124] focus:border-zinc-600 rounded-full pl-11 pr-24 text-xs font-sans text-white placeholder-zinc-550 outline-none transition-all shadow-inner relative z-0"
+                        autoFocus
+                      />
+                      
+                      {/* Integrated inside-searchbar controls */}
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                        {/* Voice search button */}
+                        <button
+                          type="button"
+                          onClick={startSpeechRecognition}
+                          className="p-1.5 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                          title="Search with Voice"
+                        >
+                          <Mic className="w-3.5 h-3.5" />
+                        </button>
+                        {/* Clean close/exit search button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setCurrentView('explore');
+                            setActiveExploreTab('home');
+                          }}
+                          className="p-1.5 bg-zinc-800/60 hover:bg-zinc-700 hover:text-white text-zinc-300 rounded-full transition-colors cursor-pointer"
+                          title="Exit Search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
-              {/* Suggestions / Results Scroll Area */}
-              <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 py-6 space-y-6 text-left pb-32 flex-1">
+                  {/* Suggestions / Results Scroll Area */}
+                  <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 py-6 space-y-6 text-left pb-32 flex-1">
                 {/* Speech Error Banner - Handling not-allowed blocked permission states gracefully */}
                 {speechError && (
                   <div className="bg-red-950/45 border border-red-900/60 text-red-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono animate-in slide-in-from-top-2 duration-300">
@@ -1625,7 +1849,44 @@ function AppContent() {
                       Search lessons, chapters & educators...
                     </p>
                   </div>
-              ) : isLabourIllusionActive ? (
+                ) : !isSearchSubmitted ? (
+                  /* Recommending keywords/suggestions while typing */
+                  <div className="max-w-xl mx-auto w-full py-4 px-2 space-y-4 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-3.5 h-3.5 text-brand-accent animate-pulse" />
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Recommended Keywords</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {searchSuggestions.length > 0 ? (
+                        searchSuggestions.map((suggestion, sIdx) => (
+                          <button
+                            key={sIdx}
+                            onClick={() => {
+                              setSearchQuery(suggestion);
+                              setIsSearchSubmitted(true);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 bg-[#0C0C0E] hover:bg-[#141416] border border-zinc-900/80 hover:border-zinc-700/80 rounded-xl text-left text-xs font-sans text-zinc-300 hover:text-white transition-all duration-150 cursor-pointer group"
+                          >
+                            <Search className="w-3.5 h-3.5 text-zinc-500 group-hover:text-brand-accent transition-colors" />
+                            <span className="flex-1 truncate">{suggestion}</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                          </button>
+                        ))
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setIsSearchSubmitted(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 bg-[#0C0C0E] hover:bg-[#141416] border border-zinc-900/80 hover:border-zinc-700/80 rounded-xl text-left text-xs font-sans text-zinc-300 hover:text-white transition-all duration-150 cursor-pointer group"
+                        >
+                          <Search className="w-3.5 h-3.5 text-zinc-500 group-hover:text-brand-accent transition-colors" />
+                          <span className="flex-1 truncate">Search for "{searchQuery}"</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : isLabourIllusionActive ? (
                 /* High-fidelity Emil Kowalski Style Search Labour Illusion Component */
                 <div className="py-12 px-6 bg-brand-dark/40 border border-brand-border/40 rounded-2xl flex flex-col items-center justify-center gap-6 text-center shadow-xl backdrop-blur-md max-w-2xl mx-auto my-8 relative overflow-hidden animate-in fade-in zoom-in duration-300">
                   <div className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-brand-accent/20 via-brand-accent to-brand-accent/20 w-full animate-pulse" />
@@ -1961,6 +2222,8 @@ function AppContent() {
                 );
               })()}
               </div>
+            </>
+          )}
             </div>
           ) : currentView === 'profile' && user ? (
             <ProfileDashboard
